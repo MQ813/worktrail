@@ -62,6 +62,10 @@ def add_revision(db, iid, sid, snapshot, kind="message_added"):
             (iid, revision, kind, dumps({"source_id": sid})),
         )
         db.execute("UPDATE drafts SET freshness='stale' WHERE source_id=?", (iid,))
+        db.execute(
+            "UPDATE project_changes SET freshness='stale' WHERE inquiry_id=? AND review='pending'",
+            (iid,),
+        )
         # Human history is retained; changed source requires renewed review.
         db.execute(
             "UPDATE inquiries SET state='needs_review' WHERE id=? AND state IN ('completed','dismissed')",
@@ -582,6 +586,7 @@ def worker(
     lease_seconds=90,
     retry_delay=30,
     automatic_drafts=True,
+    automatic_project_updates=True,
 ):
     db = connect(runtime)
     done = 0
@@ -589,6 +594,22 @@ def worker(
     if not acquire_lock(db, "worker", owner, lease_seconds):
         db.close()
         return 0
+    if automatic_project_updates:
+        from .contracts import Classification
+        from .project_updates import schedule
+
+        with db:
+            for (
+                ruled
+            ) in db.execute("""SELECT c.source_id,c.result FROM classifications c
+                JOIN sources s ON s.id=c.source_id WHERE s.baseline=0
+                AND EXISTS(SELECT 1 FROM audit a WHERE a.kind='classification_rule' AND a.target=c.source_id)""").fetchall():
+                schedule(
+                    db,
+                    ruled["source_id"],
+                    latest(db, ruled["source_id"]),
+                    Classification.model_validate_json(ruled["result"]),
+                )
     stop = Event()
     active = {"token": None, "job": None}
 
@@ -656,6 +677,25 @@ def worker(
                 request = build_request(
                     db, row["source_id"], revision, kb, row["kind"], max_chars
                 )
+                if row["kind"] == "classify":
+                    request.projects = [
+                        dict(p)
+                        for p in db.execute(
+                            "SELECT id,code,name,purpose FROM projects ORDER BY id LIMIT 100"
+                        )
+                    ]
+                if row["kind"] == "project_update":
+                    from .project_updates import context
+
+                    request.projects = context(db, row["source_id"])
+                    if row["request_id"].startswith("history:"):
+                        request.history_basis = latest(db, row["source_id"])
+                        target = int(row["request_id"].split(":")[1])
+                        request.projects = [
+                            p for p in request.projects if p["id"] == target
+                        ]
+                    if not request.projects:
+                        raise ValueError("프로젝트 연결이 필요합니다.")
                 with db:
                     db.execute(
                         "UPDATE attempts SET input=? WHERE id=?",
@@ -666,9 +706,16 @@ def worker(
                 if row["kind"] == "classify":
                     result = runner.classify(request)
                     validate_evidence(result, request)
-                else:
+                elif row["kind"] == "draft":
                     result = runner.draft(request)
                     validate_draft(result, request)
+                elif row["kind"] == "project_update":
+                    from .contracts import validate_project_update
+
+                    result = runner.project_update(request)
+                    validate_project_update(result, request)
+                else:
+                    raise ValueError("unknown_job_kind")
                 db.execute("BEGIN IMMEDIATE")
                 owned = db.execute(
                     "SELECT 1 FROM locks WHERE name=? AND token=? AND expires>?",
@@ -712,6 +759,10 @@ def worker(
                         from .worklog import capture
 
                         capture(db, iid, revision, result)
+                        if automatic_project_updates:
+                            from .project_updates import schedule
+
+                            schedule(db, iid, revision, result)
                         for action in result.actions:
                             db.execute(
                                 "INSERT OR IGNORE INTO actions(inquiry_id,description,assignee,due_at,state,evidence) VALUES(?,?,?,?,?,?)",
@@ -720,9 +771,7 @@ def worker(
                                     action.description,
                                     action.assignee,
                                     action.due_at,
-                                    "waiting"
-                                    if action.kind == "waiting"
-                                    else "proposed",
+                                    "proposed",
                                     dumps(
                                         dict(
                                             kind=action.kind,
@@ -753,7 +802,11 @@ def worker(
                             and request.direction != "outbound"
                         ):
                             queue_job(db, iid, "draft", revision)
-                else:
+                elif row["kind"] == "project_update":
+                    from .project_updates import store
+
+                    store(db, request, result)
+                elif row["kind"] == "draft":
                     db.execute(
                         "INSERT INTO draft_versions(inquiry_id,revision_id,generated,created) VALUES(?,?,?,?)",
                         (iid, revision, result.model_dump_json(), time.time()),
@@ -791,7 +844,7 @@ def worker(
                             "UPDATE drafts SET freshness=CASE WHEN revision_id=? THEN freshness ELSE 'stale' END WHERE source_id=?",
                             (current, iid),
                         )
-                if current != revision:
+                if current != revision and request.history_basis is None:
                     eligible = db.execute(
                         "SELECT s.baseline FROM revisions r JOIN sources s ON s.id=r.source_id WHERE r.id=?",
                         (current,),

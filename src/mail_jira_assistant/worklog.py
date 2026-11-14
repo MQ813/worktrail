@@ -14,10 +14,9 @@ from .storage import connect
 def project(db, name):
     if not name or not name.strip():
         return None
-    db.execute("INSERT OR IGNORE INTO projects(name) VALUES(?)", (name.strip(),))
-    return db.execute(
-        "SELECT id FROM projects WHERE name=?", (name.strip(),)
-    ).fetchone()[0]
+    from .project_updates import ensure_project
+
+    return ensure_project(db, name)
 
 
 def capture(db, iid, revision, classification):
@@ -107,6 +106,18 @@ def save(runtime, data, aid=None):
                 ):
                     raise ValueError("다른 기록의 대표는 중복 처리할 수 없습니다.")
             pid = project(db, data.get("project"))
+            if not pid and iid:
+                linked = db.execute(
+                    "SELECT project_id FROM inquiry_projects WHERE inquiry_id=?", (iid,)
+                ).fetchone()
+                if not linked:
+                    linked = db.execute(
+                        "SELECT min(project_id) FROM project_source_links WHERE inquiry_id=? HAVING count(*)=1",
+                        (iid,),
+                    ).fetchone()
+                pid = linked[0] if linked else None
+            if data["status"] == "confirmed" and not pid:
+                raise ValueError("확정 업무 기록에는 프로젝트가 필요합니다.")
             values = (
                 iid,
                 pid,
@@ -152,9 +163,10 @@ def records(runtime):
     try:
         return [
             dict(r)
-            for r in db.execute("""SELECT a.*,coalesce(p.name,ip.name,'미지정') AS project FROM activities a
+            for r in db.execute("""SELECT a.*,coalesce(a.project_id,m.project_id,sl.project_id) AS resolved_project_id,coalesce(p.name,ip.name,'미지정') AS project FROM activities a
             LEFT JOIN inquiry_projects m ON m.inquiry_id=a.inquiry_id
-            LEFT JOIN projects ip ON ip.id=m.project_id LEFT JOIN projects p ON p.id=a.project_id
+            LEFT JOIN (SELECT inquiry_id,min(project_id) AS project_id FROM project_source_links GROUP BY inquiry_id HAVING count(*)=1) sl ON sl.inquiry_id=a.inquiry_id
+            LEFT JOIN projects ip ON ip.id=coalesce(m.project_id,sl.project_id) LEFT JOIN projects p ON p.id=a.project_id
             ORDER BY a.performed_on DESC,a.id DESC""")
         ]
     finally:

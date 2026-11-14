@@ -128,7 +128,11 @@ def tasks(settings, stop):
         def run(self, kind, request):
             runner = OpenCodeRunner(
                 settings.ai_executable,
-                settings.classify_model if kind == "classify" else settings.draft_model,
+                settings.classify_model
+                if kind == "classify"
+                else (settings.project_update_model or settings.draft_model)
+                if kind == "project_update"
+                else settings.draft_model,
                 settings.ai_timeout,
                 settings.ai_agent,
                 prefix=settings.ai_prefix,
@@ -145,6 +149,9 @@ def tasks(settings, stop):
 
         def draft(self, request):
             return self.run("draft", request)
+
+        def project_update(self, request):
+            return self.run("project_update", request)
 
     runner = Runner() if settings.ai_backend == "opencode" else FakeRunner()
     while not stop.is_set():
@@ -187,6 +194,7 @@ def tasks(settings, stop):
                 lease_seconds=settings.lease_seconds,
                 retry_delay=settings.retry_delay,
                 automatic_drafts=settings.automatic_drafts,
+                automatic_project_updates=settings.automatic_project_updates,
             )
         except Exception:
             logging.exception("worker iteration failed")
@@ -336,9 +344,8 @@ def run():
                 }
                 for route in (
                     "/",
-                    "/worklog",
+                    "/today",
                     "/projects",
-                    "/?view=drafts",
                     "/operations",
                 ):
                     window.load_url(f"http://127.0.0.1:{port}" + route)
@@ -353,7 +360,7 @@ def run():
                     report["pages"][route] = window.evaluate_js(
                         "document.body.innerText"
                     )
-                window.load_url(f"http://127.0.0.1:{port}/worklog")
+                window.load_url(f"http://127.0.0.1:{port}/projects")
                 (root / "smoke.json").write_text(
                     json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8"
                 )

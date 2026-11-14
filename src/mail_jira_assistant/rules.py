@@ -49,6 +49,7 @@ def non_action(subject, body, kind, recipients="", cc="", identity=()):
         work_performed="no",
         waiting_for_others="no",
         review_required=False,
+        project_update_needed="no" if rule in ("advertisement_subject_prefix", "jira_notification_source") else "unknown",
         evidence=[],
         actions=[],
         missing_information=[],

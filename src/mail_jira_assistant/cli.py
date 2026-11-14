@@ -254,6 +254,21 @@ def main():
                 finally:
                     self.last_log = runner.last_log
 
+            def project_update(self, request):
+                runner = OpenCodeRunner(
+                    s.ai_executable,
+                    a.model or s.project_update_model or s.draft_model,
+                    s.ai_timeout,
+                    s.ai_agent,
+                    prefix=s.ai_prefix,
+                    global_args=s.ai_global_args,
+                    input_mode=s.ai_input,
+                )
+                try:
+                    return runner.project_update(request)
+                finally:
+                    self.last_log = runner.last_log
+
         runner = StageRunner() if live else FakeRunner()
         try:
             while True:
@@ -267,6 +282,7 @@ def main():
                         lease_seconds=s.lease_seconds,
                         retry_delay=s.retry_delay,
                         automatic_drafts=s.automatic_drafts,
+                        automatic_project_updates=s.automatic_project_updates,
                     ),
                     flush=True,
                 )

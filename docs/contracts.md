@@ -54,3 +54,10 @@ SQLite migration 1~4. 기존 P1의 초안/편집/작업을 보존하고 원본 �
 - `POST /api/jobs/{id}/retry`.
 
 모든 변경은 JSON·동일 origin을 요구하고 localhost Host만 허용합니다. CSP로 외부 자산·inline script·frame을 제한합니다. 원문 HTML은 실행하지 않고 첨부는 다운로드가 기본이며 안전한 raster MIME의 CID만 inline 표시합니다. 인증 없는 localhost 전용이며 사내 공개 서비스 인증을 대신하지 않습니다.
+# 프로젝트 업데이트 계약 · 0.4
+
+분류 schema 2는 기존 답변·수행·할 일 축과 별도로 `project_update_needed`(yes/no/unknown), `update_kinds`, `project_hints`를 반환한다. schema 1 저장본은 신규 축을 unknown으로 읽는다. `project_update`는 `ProjectUpdate`의 `no_change` 또는 `changes`를 반환하며 빈 변경 목록과 no_change 값의 일관성을 검증한다.
+
+변경은 project_id, section, kind, operation, entry_id/work_item_id/work_title, text, evidence, 선택적인 action_id/metadata_field를 가진다. 대상은 입력된 연결 프로젝트와 기존 항목/업무/할 일 ID로 제한한다. body 발췌 일치·날짜·허용 연산을 검사한다. 미해석 입력이 있으면 삭제 제안을 거부한다. AI는 파일 경로나 SQL을 반환하지 않는다.
+
+확정 상태와 project_changes를 분리한다. pending/confirmed/rejected/superseded는 검토 상태, current/stale/conflict는 최신성이다. 사용자 확정은 프로젝트·원문 버전과 연결을 서버에서 재검증한다. 여러 변경의 확정은 하나의 트랜잭션이며 실패 시 모두 rollback한다. 프로젝트 변경 확인과 수행 확정·답변 초안 검토·실제 발송은 별개다.

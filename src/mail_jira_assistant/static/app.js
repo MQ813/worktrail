@@ -17,6 +17,32 @@ document.querySelector('#copy-draft')?.addEventListener('click',async()=>{try{aw
 document.querySelector('#hold-draft')?.addEventListener('click',()=>saveDraft('archived'));
 const activity=document.querySelector('#activity-form');
 activity?.addEventListener('input',()=>{dirty=true});
-if(activity)activity.addEventListener('submit',async e=>{e.preventDefault();try{const d=Object.fromEntries(new FormData(activity));for(const k of ['action_id','duplicate_of','minutes'])d[k]=d[k]===''?null:Number(d[k]);d.inquiry_id=d.inquiry_id||null;d.complete_action=activity.complete_action.checked;d.version=Number(activity.dataset.version);await api('/api/activities'+(activity.dataset.id?'/'+activity.dataset.id:''),activity.dataset.id?'PUT':'POST',d);dirty=false;location.href='/worklog?on='+d.performed_on}catch(x){toast(x.message)}});
+if(activity)activity.addEventListener('submit',async e=>{e.preventDefault();try{const d=Object.fromEntries(new FormData(activity));for(const k of ['action_id','duplicate_of','minutes'])d[k]=d[k]===''?null:Number(d[k]);d.inquiry_id=d.inquiry_id||null;d.complete_action=activity.complete_action.checked;d.version=Number(activity.dataset.version);await api('/api/activities'+(activity.dataset.id?'/'+activity.dataset.id:''),activity.dataset.id?'PUT':'POST',d);dirty=false;location.href='/projects/'+activity.dataset.projectId+'?on='+encodeURIComponent(d.performed_on||'')+'#project-records'}catch(x){toast(x.message)}});
 const importer=document.querySelector('#import-form');if(importer)importer.addEventListener('submit',async e=>{e.preventDefault();await command('/api/worklog/import',Object.fromEntries(new FormData(importer)),true)});
 const projectForm=document.querySelector('#project-form');if(projectForm)projectForm.addEventListener('submit',async e=>{e.preventDefault();await command('/api/projects/link',Object.fromEntries(new FormData(projectForm)),true)});
+
+document.querySelectorAll('form[data-project-api]').forEach(form=>{
+  form.addEventListener('input',()=>{dirty=true});
+  form.addEventListener('submit',async event=>{
+    event.preventDefault();const feedback=form.querySelector('.form-feedback');const button=form.querySelector('button');
+    const data=Object.fromEntries(new FormData(form));
+    if(form.dataset.version)data.version=Number(form.dataset.version);
+    if(form.elements.namedItem('detail'))data.detail=form.elements.namedItem('detail').checked;
+    button.disabled=true;feedback.textContent='저장 중입니다…';
+    try{const result=await api(form.dataset.projectApi,form.dataset.method||'POST',data);dirty=false;
+      if(result.queued!==undefined){feedback.textContent=result.queued+'건을 등록했습니다. 운영 상태에서 처리 결과를 확인하세요.';button.disabled=false}
+      else if(result.redirect)location.href=result.redirect;else if(result.id)location.href='/projects/'+result.id;else location.reload();
+    }catch(error){feedback.textContent=error.message;button.disabled=false}
+  });
+});
+document.querySelectorAll('.project-proposal').forEach(input=>input.addEventListener('input',()=>{dirty=true}));
+document.addEventListener('click',async event=>{
+  const button=event.target.closest('[data-project-review],[data-project-batch]');if(!button)return;
+  const single=button.closest('[data-change-id]');
+  const articles=single?[single]:[...document.querySelectorAll('[data-change-id]')].filter(a=>a.querySelector('.project-select').checked);
+  const feedback=single?single.querySelector('.form-feedback'):document.querySelector('#project-review-feedback');
+  const decision=button.dataset.projectReview||button.dataset.projectBatch;
+  button.disabled=true;feedback.textContent='변경을 저장 중입니다…';
+  try{await api('/api/projects/review','POST',{selections:articles.map(a=>({id:Number(a.dataset.changeId),decision,text:a.querySelector('.project-proposal').value}))});dirty=false;location.reload()}
+  catch(error){feedback.textContent=error.message;button.disabled=false}
+});

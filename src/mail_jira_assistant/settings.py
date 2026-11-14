@@ -18,6 +18,8 @@ class Settings(BaseModel):
     knowledge: str = str(Path(__file__).parent / "demo/kb")
     history_only: bool = True
     automatic_drafts: bool = True
+    automatic_project_updates: bool = True
+    project_update_model: str | None = None
     attachment_adapter: Literal["standard", "word_active"] = "standard"
     document_adapter: Literal["eml", "fake", "outlook_msg"] = "eml"
     document_timeout: int = Field(default=20, ge=1, le=300)

@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import signal
+import sqlite3
 import subprocess
 import time
 import urllib.error
@@ -38,6 +39,7 @@ def main():
         "--exe", type=Path, default=Path("dist/WorkTrail/WorkTrail.exe")
     )
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--projects", action="store_true")
     args = parser.parse_args()
     root = args.output.resolve()
     if root.exists():
@@ -56,11 +58,11 @@ def main():
             ]
         )
 
-    process = launch(12)
+    process = launch(25 if args.projects else 12)
     try:
         report = wait_report(root)
         assert report["title"] == "WorkTrail"
-        assert len(report["pages"]) == 5
+        assert len(report["pages"]) == 4
         for route, body in report["pages"].items():
             assert "WorkTrail" in body, (route, body)
             assert "Internal Server Error" not in body
@@ -69,6 +71,32 @@ def main():
         duplicate.wait(timeout=15)
         assert (root / "duplicate.json").exists()
         iid = request(base, "/api/inquiries")[0]["id"]
+        if args.projects:
+            assert (
+                "/api/projects/{pid}/replay-history"
+                in request(base, "/openapi.json")["paths"]
+            )
+            linked = request(
+                base,
+                "/api/projects/link",
+                {"inquiry_id": iid, "project": "프로젝트 배포 검증"},
+            )
+            with urllib.request.urlopen(
+                base + f"/projects/{linked['id']}", timeout=5
+            ) as response:
+                assert "미확정" in response.read().decode("utf-8")
+            deadline = time.monotonic() + 10
+            while time.monotonic() < deadline:
+                with sqlite3.connect(root / "runtime" / "app.sqlite3") as db:
+                    done = db.execute(
+                        "SELECT count(*) FROM project_update_runs WHERE inquiry_id=?",
+                        (iid,),
+                    ).fetchone()[0]
+                if done:
+                    break
+                time.sleep(0.2)
+            else:
+                raise AssertionError("Frozen project update job did not complete")
         on = datetime.now(ZoneInfo("Asia/Seoul")).date().isoformat()
         saved = request(
             base,
@@ -111,11 +139,12 @@ def main():
         result = dict(
             passed=True,
             checks=[
-                "WebView2 five menus",
+                "WebView2 four menus",
                 "single instance",
                 "worker restart while API responds",
                 "backend exit",
                 "persistent activity on relaunch",
+                *(["project link/page/automatic update"] if args.projects else []),
             ],
             report=str(root / "smoke.json"),
         )

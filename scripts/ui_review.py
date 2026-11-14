@@ -40,9 +40,8 @@ def main():
         detail = page.locator("a.title").first.get_attribute("href")
         routes = [
             ("/", "inbox", "/"),
-            ("/?view=drafts", "drafts", "/?view=drafts"),
+            ("/?view=drafts", "draft-filter", "/"),
             ("/today", "today", "/today"),
-            ("/worklog", "worklog", "/worklog"),
             ("/projects", "projects", "/projects"),
             ("/operations", "operations", "/operations"),
             (detail, "detail", "/"),
@@ -115,12 +114,17 @@ def main():
             "() => document.querySelector('#save-status').textContent.includes('검토 완료')"
         )
 
-        page.goto(args.url + "/worklog")
+        response = context.request.post(
+            args.url + "/api/projects", data={"name": "UI 검증 프로젝트"}
+        )
+        pid = response.json()["id"]
+        page.goto(args.url + f"/projects/{pid}")
+        page.locator("#record-editor > summary").click()
         form = page.locator("#activity-form")
         form.get_by_label("수행 내용", exact=True).fill("UI 브라우저 검증용 수행 기록")
         form.locator('select[name="status"]').select_option("confirmed")
         form.get_by_role("button", name="기록 저장", exact=True).click()
-        page.wait_for_url("**/worklog?on=**")
+        page.wait_for_url("**/projects/*?on=**")
         assert "UI 브라우저 검증용 수행 기록" in page.locator("table").inner_text()
         assert not errors, errors
         assert not external, external

@@ -1,5 +1,10 @@
 # 구현 선택
 
+- 0.4: 프로젝트를 업무 기록의 중심으로 확장하고 classify 이후 draft와 project_update를 독립 작업으로 등록한다. 새 작업을 draft로 잘못 dispatch하지 않도록 명시적 종류 분기를 사용한다.
+- 확정 항목과 AI 변경안을 분리해 저장한다. UI에 미확정 변경을 바로 표시하고 부분 확정/수정/반려를 제공한다. 프로젝트 단위 버전 검증을 보수적으로 적용하며 부분 확정 후 남은 제안은 재생성한다.
+- Markdown은 DB 기반 출력이고 생성 영역 밖 메모를 보존한다. 외부 수정은 원본을 보존한 추가 후보로 가져온다. 실시간 양방향 동기화·자동 3-way 병합은 제공하지 않는다. 과거 재구성은 프로젝트·수집 기간을 명시해 요청하며 당시 revision과 생성 시점의 최신 원문 기준을 분리한다.
+- TODO/대기는 기존 action ID를 참조하며 AI 분류만으로 확정 대기 상태에 넣지 않는다. 새 확정 수행 기록은 프로젝트를 요구한다. 기존 미지정 기록은 보존한다.
+
 - P0/P1의 Python·FastAPI·Pydantic·SQLite 구조를 이어받았습니다. 미사용 추상 계층을 늘리지 않고 service/storage/web, connector/document/knowledge/AI 교체 모듈로 분리했습니다. 화면은 서버 렌더링과 로컬 CSS/JS이며 Node 빌드나 CDN이 필요 없습니다.
 - P1 DB를 migration 1~4로 올리면서 원본·초안·편집·작업 이력을 보존합니다. 메일은 content-addressed source, 대화는 별도 inquiry 연결, JIRA는 서버+키로 식별합니다. 확실하지 않은 Message-ID 병합은 하지 않습니다.
 - 미처리 revision 재조회로 poll 중간 종료 후 작업 등록을 복구합니다. 최초 baseline 이전 이력은 자동 활성화하지 않습니다. 자동 초안 여부와 실제 모델 호출을 별도 opt-in으로 나눴습니다.

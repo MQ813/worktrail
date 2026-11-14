@@ -5,7 +5,7 @@ from typing import Literal
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from . import worklog
@@ -91,23 +91,14 @@ def attach(app, runtime, page, esc, inquiries):
 
     @app.post("/api/projects/link")
     def link(data: ProjectLink):
-        db = connect(runtime)
-        try:
-            with db:
-                if not db.execute(
-                    "SELECT 1 FROM inquiries WHERE id=?", (data.inquiry_id,)
-                ).fetchone():
-                    raise HTTPException(404, "문의 없음")
-                pid = worklog.project(db, data.project)
-                db.execute(
-                    "INSERT OR REPLACE INTO inquiry_projects VALUES(?,?)",
-                    (data.inquiry_id, pid),
-                )
-        finally:
-            db.close()
-        return {"ok": True}
+        from .project_updates import link
 
-    def render_record(r):
+        return {
+            "ok": True,
+            "id": guarded(lambda: link(runtime, data.inquiry_id, data.project)),
+        }
+
+    def render_record(r, show_project=True):
         status = {
             "needs_review": "확인 필요",
             "confirmed": "수행 확정",
@@ -118,17 +109,23 @@ def attach(app, runtime, page, esc, inquiries):
             if r["inquiry_id"]
             else '<span class="muted">수동 기록</span>'
         )
+        project_cell = f"<td>{esc(r['project'])}</td>" if show_project else ""
         return (
-            f"<tr><td>{esc(r['performed_on'] or '수행일 확인 필요')}</td><td>{esc(r['project'])}</td>"
-            f'<td><a href="/worklog?edit={r["id"]}">{esc(r["description"][:200])}</a></td>'
+            f"<tr><td>{esc(r['performed_on'] or '수행일 확인 필요')}</td>{project_cell}"
+            f'<td><a href="{record_url(r)}">{esc(r["description"][:200])}</a></td>'
             f"<td>{esc(status)}{(' · 중복 #' + str(r['duplicate_of'])) if r['duplicate_of'] else ''}</td>"
             f"<td>{evidence}</td></tr>"
         )
 
+    def record_url(r):
+        if r.get("resolved_project_id"):
+            return f"/projects/{r['resolved_project_id']}?edit={r['id']}#record-editor"
+        return f"/projects?activity={r['id']}#unassigned-records"
+
     @app.get("/today")
     def today():
         on = datetime.now(ZoneInfo("Asia/Seoul")).date().isoformat()
-        body = f'<header class="top"><div><h1>오늘</h1><p>{on} · 할 일을 확인하고 수행한 업무를 기록하세요.</p></div><a class="button primary" href="/worklog">업무 기록 추가</a></header><div class="daily-grid">'
+        body = '<h1 class="sr-only">오늘</h1><div class="daily-grid">'
         panels = []
         for state, title in [
             ("open", "내 할 일"),
@@ -186,7 +183,7 @@ def attach(app, runtime, page, esc, inquiries):
             + reply_panel
             + '</section></div><div class="stack">'
             + panels[1]
-            + '</div></div><section class="card spaced"><div class="section-heading"><h2>오늘 수행 기록</h2><a class="button" href="/worklog">업무일지 보기</a></div>'
+            + '</div></div><section class="card spaced"><div class="section-heading"><h2>오늘 수행 기록</h2><a class="button" href="/projects">프로젝트에서 기록</a></div>'
         )
         records = [r for r in activities() if r["performed_on"] == on]
         body += (
@@ -194,24 +191,65 @@ def attach(app, runtime, page, esc, inquiries):
             + "".join(render_record(r) for r in records)
             + "</tbody></table></div>"
             if records
-            else '<p class="empty empty-compact">아직 기록한 업무가 없습니다. 수행한 일을 업무일지에 남겨 보세요.</p>'
+            else '<p class="empty empty-compact">오늘 확정한 수행 기록이 없습니다.</p>'
         )
-        body += '</section><p class="muted">초안 검토는 발송이나 업무 완료로 집계하지 않습니다.</p>'
+        body += "</section>"
+        pending = query(
+            "SELECT c.id,c.project_id,c.payload,p.code,p.name FROM project_changes c JOIN projects p ON p.id=c.project_id WHERE c.review='pending' ORDER BY c.id DESC LIMIT 30"
+        )
+        body += '<section class="card spaced"><h2>프로젝트 AI 제안 · 미확정</h2>'
+        import json
+
+        for c in pending:
+            body += f'<p><a href="/projects/{c["project_id"]}">{esc(c["code"])} · {esc(c["name"])}</a> · {esc(json.loads(c["payload"])["text"][:200])}</p>'
+        if not pending:
+            body += '<p class="empty empty-compact">확인을 기다리는 프로젝트 변경이 없습니다.</p>'
+        body += "</section>"
         return page(body, "today")
 
     @app.get("/worklog")
     def log(on: str = "", edit: int = 0, inquiry: str = ""):
+        from urllib.parse import urlencode
+
+        record = next((r for r in activities() if r["id"] == edit), None)
+        pid = record.get("resolved_project_id") if record else None
+        if not pid and inquiry:
+            links = query(
+                "SELECT project_id FROM inquiry_projects WHERE inquiry_id=? UNION SELECT project_id FROM project_source_links WHERE inquiry_id=?",
+                (inquiry, inquiry),
+            )
+            pid = links[0]["project_id"] if links else None
+        args = {
+            k: v for k, v in {"on": on, "edit": edit, "inquiry": inquiry}.items() if v
+        }
+        if pid:
+            target = f"/projects/{pid}"
+        else:
+            target = "/projects"
+            if edit:
+                args = {"activity": edit}
+        return RedirectResponse(
+            target
+            + ("?" + urlencode(args) if args else "")
+            + ("#record-editor" if pid else ""),
+            status_code=303,
+        )
+
+    def render_project_records(pid, on="", edit=0, inquiry=""):
         on = on or datetime.now(ZoneInfo("Asia/Seoul")).date().isoformat()
-        all_rows = activities()
+        project = query("SELECT * FROM projects WHERE id=?", (pid,))[0]
+        all_rows = [r for r in activities() if r["resolved_project_id"] == pid]
         r = next((r for r in all_rows if r["id"] == edit), {})
+        if edit and not r:
+            raise HTTPException(404, "이 프로젝트의 수행 기록이 아닙니다.")
         if not r and inquiry:
             r = {"inquiry_id": inquiry}
-        body = '<header class="top"><div><h1>업무일지</h1><p>실제 수행일을 입력하고 확정한 업무를 모아 보세요.</p></div><a class="button primary" href="#record-editor">업무 기록 추가</a></header>'
-        body += f'<div class="split"><form class="toolbar" method="get"><label>수행일<input type="date" name="on" value="{esc(on)}"></label><button>날짜 보기</button></form><a class="button" href="/api/worklog/{esc(on)}/export">Markdown 내보내기</a></div>'
-        body += '<section class="card"><h2>수행 기록</h2><div class="scroll"><table><thead><tr><th>수행일</th><th>프로젝트</th><th>내용</th><th>상태</th><th>근거</th></tr></thead><tbody>'
+        body = '<section class="card spaced" id="project-records"><div class="section-heading"><h2>수행 기록</h2><a href="#record-editor">수행 기록 추가</a></div>'
+        body += f'<form class="toolbar" method="get" action="/projects/{pid}#project-records"><label>수행일<input type="date" name="on" value="{esc(on)}"></label><button>날짜 보기</button></form>'
+        body += '<div class="scroll"><table><thead><tr><th>수행일</th><th>내용</th><th>상태</th><th>근거</th></tr></thead><tbody>'
         body += (
             "".join(
-                render_record(x)
+                render_record(x, False)
                 for x in all_rows
                 if x["performed_on"] == on or x["status"] == "needs_review"
             )
@@ -226,7 +264,7 @@ def attach(app, runtime, page, esc, inquiries):
             )
             + "</section>"
         )
-        body += f'<section class="card spaced" id="record-editor"><h2>{"기록 편집 #" + str(edit) if r else "수동 기록"}</h2><p class="muted">분류의 수행 제안을 확인하고 실제 수행일을 입력하세요. 확인 전에는 집계되지 않습니다.</p><form id="activity-form" data-id="{r.get("id", "")}" data-version="{r.get("version", 1)}"><div class="record-fields">'
+        body += f'<details class="card spaced" id="record-editor"{" open" if edit or inquiry else ""}><summary>{"수행 기록 편집 #" + str(edit) if edit else "수행 기록 추가"}</summary><form id="activity-form" data-project-id="{pid}" data-id="{r.get("id", "")}" data-version="{r.get("version", 1)}"><input type="hidden" name="project" value="{esc(project["name"])}"><div class="record-fields">'
         body += f'<label class="full">수행 내용<textarea name="description" required>{esc(r.get("description", ""))}</textarea></label>'
         for name, label, value, kind in [
             (
@@ -235,12 +273,11 @@ def attach(app, runtime, page, esc, inquiries):
                 r.get("performed_on") or ("" if r.get("id") else on),
                 "date",
             ),
-            ("project", "프로젝트", r.get("project", ""), "text"),
-            ("inquiry_id", "관련 문의 ID", r.get("inquiry_id") or "", "text"),
-            ("action_id", "연결할 할 일 ID", r.get("action_id") or "", "number"),
+            ("inquiry_id", "관련 메일·Jira", r.get("inquiry_id") or "", "text"),
+            ("action_id", "연결할 할 일", r.get("action_id") or "", "number"),
             (
                 "duplicate_of",
-                "같은 수행의 대표 기록 ID",
+                "중복 대표 기록",
                 r.get("duplicate_of") or "",
                 "number",
             ),
@@ -256,15 +293,16 @@ def attach(app, runtime, page, esc, inquiries):
                 options = [
                     (x["id"], x["subject"])
                     for x in query(
-                        "SELECT s.id,s.subject FROM inquiries i JOIN sources s ON s.id=i.id ORDER BY s.rowid DESC"
+                        "SELECT DISTINCT s.id,s.subject FROM sources s WHERE s.id IN (SELECT inquiry_id FROM project_source_links WHERE project_id=? UNION SELECT inquiry_id FROM inquiry_projects WHERE project_id=?) ORDER BY s.rowid DESC",
+                        (pid, pid),
                     )
                 ]
             elif name == "action_id":
                 options = [
                     (x["id"], x["description"])
                     for x in query(
-                        "SELECT id,description FROM actions WHERE inquiry_id=? OR ? IS NULL",
-                        (r.get("inquiry_id"), r.get("inquiry_id")),
+                        "SELECT id,description FROM actions WHERE inquiry_id IN (SELECT inquiry_id FROM project_source_links WHERE project_id=? UNION SELECT inquiry_id FROM inquiry_projects WHERE project_id=?)",
+                        (pid, pid),
                     )
                 ]
             elif name == "duplicate_of":
@@ -296,50 +334,14 @@ def attach(app, runtime, page, esc, inquiries):
             )
             + '</select></label></div><label><input type="checkbox" name="complete_action"> 연결한 할 일의 완료를 직접 확인</label><button class="primary">기록 저장</button></form>'
         )
-        if r:
+        if r.get("id"):
             body += f'<p>원문 작성일: {esc(r.get("source_date"))} · 수집 시각: {esc(r.get("collected_at"))}</p><a href="/api/activities/{edit}/history">근거·편집 이력</a>'
             for a in query(
                 "SELECT a.id,a.description,a.state FROM actions a WHERE inquiry_id=?",
                 (r.get("inquiry_id"),),
             ):
                 body += f"<p>할 일 #{a['id']}: {esc(a['description'])} ({esc(a['state'])})</p>"
-        body += (
-            '</section><details class="card spaced"><summary>기존 Markdown 가져오기</summary><p class="muted">사용자가 지정한 파일 하나만 읽으며 원본을 보존합니다. 생성 일지는 재입력하지 않습니다.</p><form id="import-form"><label>Markdown 파일의 전체 경로<input name="path" placeholder="C:\\work\\notes.md" required></label><label>수행일<input type="date" name="performed_on" value="'
-            + esc(on)
-            + '" required></label><label>프로젝트<input name="project" placeholder="프로젝트 이름"></label><button>확인 대상으로 가져오기</button></form></details>'
-        )
-        return page(body, "worklog")
+        body += "</details>"
+        return body
 
-    @app.get("/projects")
-    def projects():
-        body = '<header><h1>프로젝트</h1><p>같은 프로젝트의 문의와 수행 기록을 함께 확인하세요.</p></header><section class="card"><h2>프로젝트에 문의 연결</h2><form id="project-form"><label>관련 문의<select name="inquiry_id" id="project-inquiry" required></select></label><label>프로젝트 이름<input name="project" placeholder="예: GPIO 라이브러리" required></label><button class="primary">문의 연결</button></form></section>'
-        opts = "".join(
-            f'<option value="{esc(x["id"])}">{esc(x["subject"])}</option>'
-            for x in query(
-                "SELECT s.id,s.subject FROM inquiries i JOIN sources s ON s.id=i.id"
-            )
-        )
-        body = body.replace(
-            '<select name="inquiry_id" id="project-inquiry" required></select>',
-            '<select name="inquiry_id" required>' + opts + "</select>",
-        )
-        projects = query("SELECT * FROM projects ORDER BY name")
-        if not projects:
-            body += '<section class="card spaced"><h2>연결된 프로젝트가 없습니다</h2><p class="muted">위에서 문의를 연결하면 프로젝트별로 모아 볼 수 있습니다.</p></section>'
-        for p in projects:
-            body += '<section class="card spaced"><h2>' + esc(p["name"]) + "</h2>"
-            for i in query(
-                "SELECT s.id,s.subject FROM inquiry_projects m JOIN sources s ON s.id=m.inquiry_id WHERE m.project_id=?",
-                (p["id"],),
-            ):
-                body += f'<p><a href="/inquiries/{esc(i["id"])}">{esc(i["subject"])}</a></p>'
-                for a in query("SELECT * FROM actions WHERE inquiry_id=?", (i["id"],)):
-                    body += f"<p>할 일 #{a['id']} · {esc(a['description'])} · {esc(a['state'])}</p>"
-            body += (
-                '<div class="scroll"><table><thead><tr><th>수행일</th><th>프로젝트</th><th>내용</th><th>상태</th><th>근거</th></tr></thead><tbody>'
-                + "".join(
-                    render_record(r) for r in activities() if r["project"] == p["name"]
-                )
-                + "</tbody></table></div></section>"
-            )
-        return page(body, "projects")
+    return render_project_records

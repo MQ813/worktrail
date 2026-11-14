@@ -49,6 +49,16 @@ def backup(runtime, destination):
             dest = root / p
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(Path(runtime) / p, dest)
+        project_root = Path(runtime) / "projects"
+        if project_root.exists():
+            for p in project_root.rglob("*"):
+                if not p.is_file():
+                    continue
+                if not p.resolve().is_relative_to(project_root.resolve()) or p.is_symlink():
+                    raise ValueError("invalid_project_document_reference")
+                dest = root / p.relative_to(runtime)
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(p, dest)
         manifest = {
             str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest()
             for p in root.rglob("*")

@@ -43,12 +43,12 @@ def connect(runtime):
     ready = db.execute(
         "SELECT 1 FROM sqlite_master WHERE type='table' AND name='migrations'"
     ).fetchone()
-    if ready and db.execute("SELECT max(version) FROM migrations").fetchone()[0] == 5:
+    if ready and db.execute("SELECT max(version) FROM migrations").fetchone()[0] == 6:
         return db
     if ready:
         # A consistent pre-upgrade snapshot also retains edits in an older database.
         previous = db.execute("SELECT max(version) FROM migrations").fetchone()[0] or 0
-        if previous > 5:
+        if previous > 6:
             db.close()
             raise ValueError("database_schema_newer_than_application")
         backup_path = path / ("pre-migration-v" + str(previous) + ".sqlite3")
@@ -147,5 +147,9 @@ def connect(runtime):
     CREATE TABLE IF NOT EXISTS worklog_imports(path TEXT PRIMARY KEY, hash TEXT NOT NULL, imported REAL NOT NULL);
     """)
     db.execute("INSERT OR IGNORE INTO migrations VALUES(5)")
+    from .project_updates import migrate
+
+    migrate(db, script, _column)
+    db.execute("INSERT OR IGNORE INTO migrations VALUES(6)")
     db.commit()
     return db

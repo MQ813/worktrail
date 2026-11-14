@@ -21,6 +21,8 @@ class Request(Strict):
     notes: list[dict] = Field(default_factory=list)
     open_actions: list[dict] = Field(default_factory=list)
     missing_information: list[str] = Field(default_factory=list)
+    projects: list[dict] = Field(default_factory=list)
+    history_basis: int | None = None
 
 
 class Evidence(Strict):
@@ -39,7 +41,7 @@ class Action(Strict):
 
 
 class Classification(Strict):
-    schema_version: Literal["1"] = "1"
+    schema_version: Literal["1", "2"] = "2"
     response_expected: Literal["yes", "no", "unknown"]
     action_required: Literal["yes", "no", "unknown"]
     work_performed: Literal["yes", "no", "unknown"]
@@ -48,6 +50,83 @@ class Classification(Strict):
     evidence: list[Evidence]
     actions: list[Action] = Field(default_factory=list)
     missing_information: list[str] = Field(default_factory=list)
+    project_update_needed: Literal["yes", "no", "unknown"] = "unknown"
+    update_kinds: list[str] = Field(default_factory=list)
+    project_hints: list[str] = Field(default_factory=list)
+
+
+class ProjectChange(Strict):
+    project_id: int
+    section: Literal[
+        "overview", "progress", "issues", "decisions", "updates", "next_actions"
+    ]
+    kind: Literal[
+        "todo",
+        "decision",
+        "progress",
+        "schedule",
+        "performed",
+        "waiting",
+        "issue",
+        "project_metadata",
+    ]
+    operation: Literal["add", "update", "delete"] = "add"
+    entry_id: int | None = None
+    work_item_id: int | None = None
+    work_title: str = Field(default="", max_length=300)
+    detail: bool = False
+    text: str = Field(min_length=1, max_length=5000)
+    reason: str = Field(default="", max_length=2000)
+    evidence: list[Evidence] = Field(min_length=1)
+    action_id: int | None = None
+    metadata_field: Literal["purpose", "owner", "state", "started_on"] | None = None
+
+
+class ProjectUpdate(Strict):
+    no_change: bool = False
+    changes: list[ProjectChange] = Field(default_factory=list, max_length=50)
+
+
+def validate_project_update(result, request):
+    if result.no_change == bool(result.changes):
+        raise ValueError("project_update_result_inconsistent")
+    projects = {p["id"]: p for p in request.projects}
+    for change in result.changes:
+        p = projects.get(change.project_id)
+        if not p:
+            raise ValueError("project_target_not_linked")
+        entries = {e["id"]: e for e in p["entries"]}
+        if change.operation != "add" and change.entry_id not in entries:
+            raise ValueError("project_entry_missing")
+        if change.operation == "delete" and request.limitations:
+            raise ValueError("project_delete_requires_complete_evidence")
+        if change.operation == "add" and change.entry_id is not None:
+            raise ValueError("project_add_has_target")
+        if change.entry_id and entries[change.entry_id]["section"] != change.section:
+            raise ValueError("project_section_mismatch")
+        if change.work_item_id and change.work_item_id not in {
+            w["id"] for w in p["work_items"]
+        }:
+            raise ValueError("project_work_item_mismatch")
+        if change.action_id and change.action_id not in {
+            a["id"] for a in request.open_actions
+        }:
+            raise ValueError("project_action_mismatch")
+        if change.metadata_field:
+            if change.section != "overview" or change.operation != "add":
+                raise ValueError("project_metadata_operation_invalid")
+            if change.metadata_field == "started_on":
+                from datetime import date
+
+                date.fromisoformat(change.text)
+        for evidence in change.evidence:
+            if (
+                evidence.source_ref != request.source_ref
+                or evidence.segment_ref != "body"
+                or not evidence.text
+                or evidence.text not in request.body
+            ):
+                raise ValueError("project_invalid_evidence")
 
 
 class KnowledgeEvidence(Strict):
@@ -70,6 +149,7 @@ class Draft(Strict):
 class AiRunner(Protocol):
     def classify(self, request: Request) -> Classification: ...
     def draft(self, request: Request) -> Draft: ...
+    def project_update(self, request: Request) -> ProjectUpdate: ...
 
 
 def validate_evidence(result, request):

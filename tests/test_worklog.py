@@ -167,7 +167,7 @@ def test_com_fake_timeout_recovery_and_ui_independence(tmp_path):
 def test_v4_migration_snapshot_keeps_existing_data(tmp_path):
     db = connect(tmp_path)
     with db:
-        db.execute("DELETE FROM migrations WHERE version=5")
+        db.execute("DELETE FROM migrations WHERE version>=5")
     db.close()
     connect(tmp_path).close()
     assert (tmp_path / "pre-migration-v4.sqlite3").exists()
@@ -218,6 +218,7 @@ def test_mail_and_jira_same_work_are_confirmed_once_with_all_evidence(tmp_path):
             runtime,
             dict(
                 description=r["description"],
+                project="공통 검증",
                 performed_on="2026-11-02",
                 status="confirmed",
                 inquiry_id=r["inquiry_id"],
