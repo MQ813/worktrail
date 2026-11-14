@@ -203,27 +203,67 @@ def create_app(runtime, kb=None, jira_servers=(), *, sample_mode=False):
         return result[0]
 
     def page(body, tab="inbox"):
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+
+        navigation = [
+            (
+                "today",
+                "/today",
+                "오늘",
+                "M8 2v4m8-4v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14H3V6a2 2 0 0 1 2-2",
+            ),
+            ("inbox", "/", "문의함", "M3 4h18v16H3zM3 13h5l2 3h4l2-3h5"),
+            (
+                "drafts",
+                "/?view=drafts",
+                "답변 초안",
+                "M14 3H4v18h16V11M9 15l1-5 8-8 4 4-8 8-5 1z",
+            ),
+            ("worklog", "/worklog", "업무일지", "M5 3h14v18H5zM9 8h6m-6 4h6m-6 4h4"),
+            ("projects", "/projects", "프로젝트", "M3 6h7l2 2h9v12H3zM3 6V4h7l2 2"),
+            ("ops", "/operations", "운영 상태", "M3 12h4l3-8 4 16 3-8h4"),
+        ]
+        title = next((label for key, _, label, _ in navigation if key == tab), "문의함")
+        nav = ""
+        for key, href, label, path in navigation:
+            if key in ("today", "worklog", "ops"):
+                nav += (
+                    '<div class="nav-label">'
+                    + {"today": "업무", "worklog": "기록", "ops": "관리"}[key]
+                    + "</div>"
+                )
+            current = ' class="active" aria-current="page"' if key == tab else ""
+            nav += (
+                f'<a href="{href}"{current}><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="{path}"/></svg>'
+                + label
+                + "</a>"
+            )
+        context = ""
         connection = rows("SELECT value FROM meta WHERE key='ai_connection_status'")
         if connection:
-            body = (
-                '<p class="muted">AI 실행: '
+            context += (
+                '<p class="connection-status">AI 실행: '
                 + esc(connection[0]["value"])
                 + "</p>"
-                + body
             )
         if sample_mode:
-            body = (
-                '<section class="card"><strong>합성 샘플 환경 · 실제 사내 데이터 아님</strong><p>메일 14건 + 연결 JIRA 3건 · 내 역할: 조민규. JIRA는 로컬 fixture를 조회합니다. 이미지 캡처는 직접 확인이 필요합니다.</p></section>'
-                + body
+            context += (
+                '<details class="sample-notice"><summary>합성 샘플 환경 <span>실제 사내 데이터 아님</span></summary>'
+                "<p>메일 14건 + 연결 JIRA 3건 · 내 역할: 조민규. JIRA는 로컬 fixture를 조회합니다. 이미지 캡처는 직접 확인이 필요합니다.</p></details>"
             )
+        date = datetime.now(ZoneInfo("Asia/Seoul")).strftime("%Y.%m.%d")
         return HTMLResponse(
-            '<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>WorkTrail</title><link rel="stylesheet" href="/static/app.css"><script src="/static/app.js" defer></script></head><body><div class="shell"><aside class="sidebar"><a class="brand" href="/">WorkTrail<small>MAIL · JIRA · WORKLOG</small></a><nav class="nav"><a href="/today">오늘</a><a href="/worklog">업무일지</a><a href="/projects">프로젝트</a><a class="'
-            + ("active" if tab == "inbox" else "")
-            + '" href="/">▤ &nbsp; 문의함</a><a href="/?view=drafts">✎ &nbsp; 답변 초안</a><a class="'
-            + ("active" if tab == "ops" else "")
-            + '" href="/operations">◷ &nbsp; 운영 상태</a></nav><footer>로컬 개인 워크스페이스<br>검토 → 직접 답변 → 업무 확인</footer></aside><main class="main">'
+            '<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>WorkTrail</title><link rel="stylesheet" href="/static/app.css"><script src="/static/app.js" defer></script></head><body><a class="skip-link" href="#main">본문으로 건너뛰기</a><div class="shell"><aside class="sidebar"><a class="brand" href="/"><span class="brand-mark" aria-hidden="true">w.</span>WorkTrail</a><div class="workspace-name">개인 워크스페이스</div><nav class="nav" aria-label="주 메뉴">'
+            + nav
+            + '</nav><footer><span class="local-indicator" aria-hidden="true"></span> 로컬에 보관되는 업무<br><span class="muted">검토 후 직접 답변하세요.</span></footer></aside><div class="workspace"><div class="workspace-bar"><span>내 워크스페이스 <span class="breadcrumb-divider" aria-hidden="true">/</span> <strong>'
+            + title
+            + "</strong></span><time>"
+            + date
+            + '</time></div><main class="main" id="main" tabindex="-1">'
+            + context
             + body
-            + '</main></div><div id="toast" role="status" aria-live="polite"></div></body></html>'
+            + '</main></div></div><div id="toast" role="status" aria-live="polite" aria-atomic="true"></div></body></html>'
         )
 
     @app.get("/api/inquiries")
@@ -343,9 +383,15 @@ def create_app(runtime, kb=None, jira_servers=(), *, sample_mode=False):
             ("재검토할 초안", sum(r["freshness"] == "stale" for r in all_items)),
         ]
         body = (
-            '<div class="top"><div><div class="eyebrow">YOUR DAILY WORKSPACE</div><h1>'
-            + ("답변 초안함" if view == "drafts" else "오늘의 문의함")
-            + '</h1><div class="muted">대화를 확인하고, 할 일을 정리하고, 근거 있는 답변을 준비하세요.</div></div><a class="button" href="/operations">운영 상태 보기</a></div><div class="stats">'
+            '<header class="top"><div><h1>'
+            + ("답변 초안" if view == "drafts" else "문의함")
+            + '</h1><p class="muted">'
+            + (
+                "근거를 확인하고 답변을 다듬으세요. 검토 완료 후 직접 발송합니다."
+                if view == "drafts"
+                else "받은 문의를 확인하고 답변과 할 일을 이어가세요."
+            )
+            + '</p></div><a class="button primary" href="/worklog">업무 기록 추가</a></header><div class="stats" aria-label="전체 문의 요약">'
             + "".join(
                 '<div class="stat"><span class="muted">'
                 + label
@@ -357,11 +403,16 @@ def create_app(runtime, kb=None, jira_servers=(), *, sample_mode=False):
             + "</div>"
         )
         body += (
-            '<section class="card"><form class="toolbar" method="get"><input name="q" value="'
+            '<section class="card inbox-panel"><div class="list-heading"><h2>'
+            + ("초안 목록" if view == "drafts" else "문의 목록")
+            + ' <span class="result-count">'
+            + str(len(items))
+            + '건</span></h2><span class="muted">최근 변경순</span></div>'
+            + '<form class="inbox-filters" method="get"><div class="filter-main"><label class="search-field">문의 검색<input name="q" value="'
             + esc(q)
-            + '" placeholder="제목, 보낸 사람, 본문 검색" aria-label="문의 검색"><input type="hidden" name="view" value="'
+            + '" placeholder="제목, 보낸 사람, 본문"><input type="hidden" name="view" value="'
             + esc(view)
-            + '"><select name="state" aria-label="문의 상태"><option value="">모든 상태</option>'
+            + '"></label><label>업무 상태<select name="state"><option value="">모든 상태</option>'
             + "".join(
                 '<option value="'
                 + s
@@ -378,7 +429,7 @@ def create_app(runtime, kb=None, jira_servers=(), *, sample_mode=False):
                     "dismissed",
                 )
             )
-            + '</select><select name="source" aria-label="출처"><option value="">모든 출처</option>'
+            + '</select></label><label>출처<select name="source"><option value="">모든 출처</option>'
             + "".join(
                 '<option value="'
                 + v
@@ -393,15 +444,19 @@ def create_app(runtime, kb=None, jira_servers=(), *, sample_mode=False):
                     ("jira", "JIRA"),
                 ]
             )
-            + '</select><input name="server" value="'
+            + '</select></label><button class="primary">검색</button><a class="button" href="'
+            + ("/?view=drafts" if view == "drafts" else "/")
+            + '">초기화</a></div><details class="advanced-filters"'
+            + (" open" if server or work or after else "")
+            + '><summary>상세 필터</summary><div class="filter-extra"><label>서버 · 프로젝트 · 상대방<input name="server" value="'
             + esc(server)
-            + '" placeholder="서버 · 프로젝트 · 상대방" aria-label="서버 또는 프로젝트"><select name="work" aria-label="작업 필터"><option value="">모든 작업</option><option value="actions" '
+            + '" placeholder="이름으로 검색"></label><label>작업<select name="work"><option value="">모든 작업</option><option value="actions" '
             + ("selected" if work == "actions" else "")
             + '>남은 할 일</option><option value="failed" '
             + ("selected" if work == "failed" else "")
-            + '>실패 작업</option></select><input type="date" name="after" value="'
+            + '>실패 작업</option></select></label><label>수집 날짜 이후<input type="date" name="after" value="'
             + esc(after)
-            + '" aria-label="수집 날짜 이후"><button class="primary">검색</button></form><div class="scroll"><table><thead><tr><th>문의 · 대화</th><th>업무 상태</th><th>답변 초안</th><th class="hide-mobile">출처</th></tr></thead><tbody>'
+            + '"></label></div></details></form><div class="scroll"><table class="inquiry-table"><thead><tr><th>문의 · 대화</th><th>업무 상태</th><th>답변 초안</th><th class="hide-mobile">출처</th></tr></thead><tbody>'
         )
         for r in items:
             body += (
@@ -437,7 +492,7 @@ def create_app(runtime, kb=None, jira_servers=(), *, sample_mode=False):
             )
             + '</section><div class="notice">초안 검토는 발송과 별개입니다. 실제 답변 후 업무 상태를 직접 확인하세요.</div>'
         )
-        return page(body)
+        return page(body, "drafts" if view == "drafts" else "inbox")
 
     @app.post("/api/inquiries/{iid}/classify")
     def classify(iid: str):
@@ -1025,7 +1080,7 @@ def create_app(runtime, kb=None, jira_servers=(), *, sample_mode=False):
             body += (
                 "<label>"
                 + label
-                + '</label><select name="'
+                + '<select name="'
                 + axis
                 + '">'
                 + "".join(
@@ -1042,17 +1097,17 @@ def create_app(runtime, kb=None, jira_servers=(), *, sample_mode=False):
                         ("unknown", "확인 필요"),
                     ]
                 )
-                + "</select>"
+                + "</select></label>"
             )
         body += (
-            '<label>판단 메모</label><input name="note" value="'
+            '<label>판단 메모<input name="note" value="'
             + esc(manual[0]["note"] if manual else "")
-            + '"><p><button>분류 저장</button></p></form>'
+            + '"></label><p><button>분류 저장</button></p></form>'
         )
         body += (
             '</details><details><summary>다른 문의에 출처 연결</summary><form id="link-form" action="/api/sources/'
             + (sources[0]["id"] if sources else iid)
-            + '/link"><label>대상 문의 ID</label><input name="target" required placeholder="대상 문의의 64자리 ID"><button>연결</button></form><p class="muted">현재 문의 ID <code>'
+            + '/link"><label>대상 문의 ID<input name="target" required placeholder="대상 문의의 64자리 ID"></label><button>연결</button></form><p class="muted">현재 문의 ID <code>'
             + iid
             + "</code></p></details></section></div></div>"
         )
@@ -1142,7 +1197,7 @@ def create_app(runtime, kb=None, jira_servers=(), *, sample_mode=False):
     @app.get("/operations", response_class=HTMLResponse)
     def operations():
         data = operations_data()
-        body = '<div class="eyebrow">SYSTEM HEALTH</div><h1>운영 상태</h1><p class="muted">수집과 AI 처리는 독립적으로 실행됩니다. 실패 원인을 확인한 뒤 필요한 작업만 다시 실행하세요.</p><section class="card"><h2>JIRA 추적</h2><form class="toolbar" id="jira-form"><input name="url" type="url" required placeholder="https://jira.example/browse/PROJ-123" aria-label="JIRA 이슈 URL"><button class="primary">이슈 등록</button></form>'
+        body = '<header><h1>운영 상태</h1><p class="muted">수집과 AI 처리 상태를 확인하고 실패한 작업을 다시 실행하세요.</p></header><section class="card"><h2>JIRA 추적</h2><form class="toolbar" id="jira-form"><label class="grow">JIRA 이슈 URL<input name="url" type="url" required placeholder="https://jira.example/browse/PROJ-123"></label><button class="primary">이슈 등록</button></form>'
         for j in data["jira"]:
             body += (
                 '<div class="action"><span>'
@@ -1190,7 +1245,7 @@ def create_app(runtime, kb=None, jira_servers=(), *, sample_mode=False):
                 )
                 + "</td></tr>"
             )
-        body += '</tbody></table></div></section><section class="card spaced"><h2>최근 실행</h2><table><thead><tr><th>작업</th><th>소요 시간</th><th>입력 분량</th><th>결과</th></tr></thead><tbody>'
+        body += '</tbody></table></div></section><section class="card spaced"><h2>최근 실행</h2><div class="scroll"><table><thead><tr><th>작업</th><th>소요 시간</th><th>입력 분량</th><th>결과</th></tr></thead><tbody>'
         for attempt in data["attempts"]:
             body += (
                 "<tr><td>#"
@@ -1207,7 +1262,7 @@ def create_app(runtime, kb=None, jira_servers=(), *, sample_mode=False):
                 + esc(attempt["error"] or "성공")
                 + "</td></tr>"
             )
-        body += "</tbody></table><h3>마지막 메일 수집</h3>"
+        body += "</tbody></table></div><h3>마지막 메일 수집</h3>"
         from datetime import datetime
 
         for entry in data["meta"]:

@@ -1,3 +1,9 @@
+# WorkTrail UI 개선 · 2026-11-14
+
+Taste Skill과 UI UX Pro Max를 검토해 업무 앱에 맞는 시각 체계·탐색·폼·접근성 기준을 적용했습니다. [검토와 적용 범위](docs/ui-design-review.md), [디자인 기준](design-system/worktrail/MASTER.md)을 확인하세요.
+
+새 Windows 실행 파일: `dist/ui-refresh/WorkTrail/WorkTrail.exe`. 기존 앱에서 편집 내용을 저장하고 종료한 뒤 실행하세요. 브라우저 42개 화면/너비 조합, 기능 테스트 60개, 실제 Windows WebView2 실행·재기동 검증을 통과했습니다.
+
 # WorkTrail 0.3.3
 
 새 초안 요청은 앱 내부에서 자동 처리됩니다. 개발용 worker 실행 안내를 제거하고 최근 생성 상태와 결과 새로고침 링크를 표시합니다. 기존 창의 편집 내용을 저장하고 새 버전을 실행하세요.
