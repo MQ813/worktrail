@@ -1,0 +1,7 @@
+profile = "demo"
+runtime = "../runtime"
+inbox = "../tests/fixtures/inbox"
+knowledge = "../tests/fixtures/kb"
+history_only = true
+ai_backend = "fake"
+identity = ["engineer@example.test"]

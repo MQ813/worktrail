@@ -1,0 +1,9 @@
+From: customer@example.test
+To: engineer@example.test
+Subject: GPIO leakage inquiry
+Message-ID: <gpio-001@example.test>
+Date: Sat, 14 Nov 2026 09:00:00 +0900
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+GPIO 누설 전류 조건을 확인해 회신 부탁드립니다.

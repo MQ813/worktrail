@@ -1,0 +1,11 @@
+[Unit]
+Description=Single local inquiry AI worker
+[Service]
+WorkingDirectory=%h/mail-jira
+EnvironmentFile=-%h/.config/mail-jira/secrets.env
+ExecStart=%h/mail-jira/.venv/bin/mail-jira --config %h/mail-jira/config/corporate.toml worker --watch --live
+Restart=on-failure
+RestartSec=30
+UMask=0077
+[Install]
+WantedBy=default.target

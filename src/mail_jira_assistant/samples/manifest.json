@@ -1,0 +1,143 @@
+{
+  "version": 1,
+  "identity": [
+    "mingyu.cho@worktrail.example",
+    "조민규"
+  ],
+  "mail_count": 14,
+  "jira_count": 3,
+  "cases": [
+    {
+      "file": "01-ad.eml",
+      "message_id": "<worktrail-samples-v1-01@worktrail.example>",
+      "category": "ad",
+      "subject": "(광고) EDA 시뮬레이터 연말 프로모션",
+      "response_expected": "no",
+      "expected_tasks": [],
+      "needs_image_review": false
+    },
+    {
+      "file": "02-ad.eml",
+      "message_id": "<worktrail-samples-v1-02@worktrail.example>",
+      "category": "ad",
+      "subject": "(광고) 반도체 기술 세미나 무료 등록",
+      "response_expected": "no",
+      "expected_tasks": [],
+      "needs_image_review": false
+    },
+    {
+      "file": "03-ad.eml",
+      "message_id": "<worktrail-samples-v1-03@worktrail.example>",
+      "category": "ad",
+      "subject": "(광고) 계측 장비 신제품 및 카탈로그",
+      "response_expected": "no",
+      "expected_tasks": [],
+      "needs_image_review": false
+    },
+    {
+      "file": "04-cc.eml",
+      "message_id": "<worktrail-samples-v1-04@worktrail.example>",
+      "category": "cc",
+      "subject": "[샘플] WT65 라이브러리 면적 자료 확인 요청",
+      "response_expected": "no",
+      "expected_tasks": [],
+      "needs_image_review": false
+    },
+    {
+      "file": "05-cc.eml",
+      "message_id": "<worktrail-samples-v1-05@worktrail.example>",
+      "category": "cc",
+      "subject": "[샘플] ESD 검증 보고서 형식 문의",
+      "response_expected": "no",
+      "expected_tasks": [],
+      "needs_image_review": false
+    },
+    {
+      "file": "06-system.eml",
+      "message_id": "<worktrail-samples-v1-06@worktrail.example>",
+      "category": "system",
+      "subject": "[샘플] 설계 포털 계정 권한 만료 예정 알림",
+      "response_expected": "no",
+      "expected_tasks": [],
+      "needs_image_review": false
+    },
+    {
+      "file": "07-system.eml",
+      "message_id": "<worktrail-samples-v1-07@worktrail.example>",
+      "category": "system",
+      "subject": "[샘플] 11월 부서 행사 일정 자동 안내",
+      "response_expected": "no",
+      "expected_tasks": [],
+      "needs_image_review": false
+    },
+    {
+      "file": "08-simple.eml",
+      "message_id": "<worktrail-samples-v1-08@worktrail.example>",
+      "category": "simple",
+      "subject": "[샘플] 고객 문의: WT65 GPIO fail-safe 조건",
+      "response_expected": "yes",
+      "expected_tasks": [],
+      "needs_image_review": false
+    },
+    {
+      "file": "09-image.eml",
+      "message_id": "<worktrail-samples-v1-09@worktrail.example>",
+      "category": "image",
+      "subject": "[샘플] 고객 문의: GPIO 누설 전류 캡처 해석",
+      "response_expected": "yes",
+      "expected_tasks": [],
+      "needs_image_review": true
+    },
+    {
+      "file": "10-simulation.eml",
+      "message_id": "<worktrail-samples-v1-10@worktrail.example>",
+      "category": "simulation",
+      "subject": "[샘플] 고객 복수 문의: ESD clamp 설명 및 추가 simulation",
+      "response_expected": "yes",
+      "expected_tasks": [
+        "코너·온도 simulation",
+        "2026-11-18 17:00 KST 결과 회신"
+      ],
+      "needs_image_review": false
+    },
+    {
+      "file": "11-release.eml",
+      "message_id": "<worktrail-samples-v1-11@worktrail.example>",
+      "category": "release",
+      "subject": "[샘플] 고객 복수 문의: GPIO 호환성 답변 및 DB release 요청",
+      "response_expected": "yes",
+      "expected_tasks": [
+        "LVS/checksum 검증",
+        "2026-11-20 15:00 KST DB release"
+      ],
+      "needs_image_review": false
+    },
+    {
+      "file": "12-jira.eml",
+      "message_id": "<worktrail-samples-v1-12@worktrail.example>",
+      "category": "jira",
+      "subject": "[JIRA] ESD-1234 고객 ESD clamp 시험 조건 문의",
+      "response_expected": "no",
+      "expected_tasks": [],
+      "needs_image_review": false
+    },
+    {
+      "file": "13-jira.eml",
+      "message_id": "<worktrail-samples-v1-13@worktrail.example>",
+      "category": "jira",
+      "subject": "[JIRA] ESD-1235 추가 simulation 일정 확인",
+      "response_expected": "no",
+      "expected_tasks": [],
+      "needs_image_review": false
+    },
+    {
+      "file": "14-jira.eml",
+      "message_id": "<worktrail-samples-v1-14@worktrail.example>",
+      "category": "jira",
+      "subject": "[JIRA] ESD-1236 DB release 진행 공유",
+      "response_expected": "no",
+      "expected_tasks": [],
+      "needs_image_review": false
+    }
+  ]
+}

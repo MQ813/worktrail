@@ -1,0 +1,29 @@
+# 실제 경로·본인 계정·모델을 사내에서 확인하고 교체합니다. 비밀 값은 환경변수로 전달합니다.
+profile = "corporate"
+runtime = "/var/lib/mail-jira"
+inbox = "/srv/mail-export/inbox"
+sent = "/srv/mail-export/sent"
+knowledge = "/srv/knowledge"
+identity = ["replace-me@company.example"]
+history_only = true
+automatic_drafts = false
+stable_seconds = 3
+ai_backend = "opencode"
+ai_executable = "opencode"
+# classify_model = "corporate-provider/model"
+# draft_model = "corporate-provider/model"
+ai_timeout = 120
+max_chars = 24000
+lease_seconds = 90
+retry_delay = 30
+poll_seconds = 60
+
+[[jira_servers]]
+server_id = "internal"
+base_url = "https://jira.company.example"
+api_version = "2"
+token_env = "MAIL_JIRA_INTERNAL_TOKEN"
+timeout = 20
+poll_seconds = 300
+closed_poll_seconds = 3600
+identity = ["replace-jira-account-id"]

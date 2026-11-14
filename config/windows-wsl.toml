@@ -1,0 +1,15 @@
+# Existing WSL OpenCode, no install/login changes. Paths are from this development machine.
+# Select a model only after inspecting: wsl -d Ubuntu -- <executable> models
+profile = "home"
+ai_backend = "opencode"
+ai_executable = "/home/minq/.nvm/versions/node/v22.22.2/bin/opencode"
+ai_prefix = ["wsl.exe", "-d", "Ubuntu", "--cd", "/tmp", "--", "env", "OPENCODE_PERMISSION={\"*\":\"deny\"}", "timeout", "--kill-after=2s", "85s"]
+ai_global_args = ["--standalone"]
+ai_input = "stdin"
+ai_agent = "plan"
+ai_timeout = 90
+history_only = true
+automatic_drafts = false
+inbox = "../runtime/inbox"
+sent = "../runtime/sent"
+knowledge = "../runtime/knowledge"

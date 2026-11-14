@@ -1,0 +1,7 @@
+[
+ {"id":"S01","subject":"GPIO 기술 문의","body":"GPIO 입력 누설 전류를 확인하고 회신 부탁드립니다.","direction":"inbound","expected":{"response_expected":"yes","action_required":"yes","work_performed":"no"}},
+ {"id":"S02","subject":"조건 누락","body":"GPIO 누설 전류가 얼마인지 확인 부탁드립니다. 적용 공정과 온도는 아직 모릅니다.","direction":"inbound","expected":{"response_expected":"yes"},"draft_modes":["clarification_request","internal_review"]},
+ {"id":"S04-promise","subject":"수행 예정","body":"온도를 검토한 후 전달하겠습니다.","direction":"outbound","expected":{"work_performed":"no","action_required":"yes"}},
+ {"id":"S04-performed","subject":"수행 완료","body":"검증을 완료했고 결과를 첨부합니다.","direction":"outbound","expected":{"work_performed":"yes","response_expected":"no"}},
+ {"id":"S18","subject":"지식 없음","body":"새로운 미확인 공정의 수치를 답변 부탁드립니다.","direction":"inbound","expected":{"response_expected":"yes"},"draft_modes":["clarification_request","internal_review"]}
+]

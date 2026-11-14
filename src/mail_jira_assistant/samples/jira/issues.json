@@ -1,0 +1,142 @@
+{
+  "issues": {
+    "ESD-1234": {
+      "id": "1234",
+      "key": "ESD-1234",
+      "fields": {
+        "summary": "[샘플] WT65 ESD clamp HBM/CDM 시험 조건 질의",
+        "description": "[합성 JIRA fixture · 원격 서버 접속 없음]\n고객은 WT65 clamp v2.1의 HBM 2 kV와 CDM 500 V 검증 조건을 문의했습니다. 담당자는 조민규(mingyu.cho)입니다. 기존 가이드로 설명하면 되며 신규 simulation이나 DB release 요청은 아닙니다.",
+        "status": {
+          "name": "Open"
+        },
+        "assignee": {
+          "name": "mingyu.cho",
+          "displayName": "조민규"
+        },
+        "updated": "2026-11-14T09:00:00+09:00",
+        "comment": {
+          "total": 3,
+          "comments": [
+            {
+              "id": "ESD-1234-0",
+              "author": {
+                "name": "customer"
+              },
+              "body": "우리는 1.8 V I/O에 clamp v2.1을 사용하고 있습니다. HBM과 CDM 판정 기준 및 fixture 차이를 기존 가이드 기준으로 설명 부탁드립니다.",
+              "created": "2026-11-12T09:00:00+09:00"
+            },
+            {
+              "id": "ESD-1234-1",
+              "author": {
+                "name": "mingyu.cho"
+              },
+              "body": "이전 시험 리포트를 확인하겠습니다. 아직 고객에게 답변을 보내지 않았습니다.",
+              "created": "2026-11-13T09:00:00+09:00"
+            },
+            {
+              "id": "ESD-1234-2",
+              "author": {
+                "name": "customer"
+              },
+              "body": "중요한 조건을 추가합니다. 고객 시험은 JS-001과 JS-002 순서를 구분하며, 가이드에 없는 판정 수치는 추측하지 말아 주세요.",
+              "created": "2026-11-14T09:00:00+09:00"
+            }
+          ]
+        },
+        "attachment": []
+      }
+    },
+    "ESD-1235": {
+      "id": "1235",
+      "key": "ESD-1235",
+      "fields": {
+        "summary": "[샘플] ESD trigger corner/temperature simulation 요청",
+        "description": "[합성 JIRA fixture · 원격 서버 접속 없음]\n담당자는 조민규(mingyu.cho)입니다. clamp v2.1, VDD 1.8 V, pulse rise time 10 ns에서 TT/SS/FF 및 -40/25/125 C sweep을 신규 수행해 주세요. 기한은 2026-11-18 17:00 KST입니다. 실행 전 요청 조건을 회신할 필요가 있습니다.",
+        "status": {
+          "name": "In Progress"
+        },
+        "assignee": {
+          "name": "mingyu.cho",
+          "displayName": "조민규"
+        },
+        "updated": "2026-11-14T09:00:00+09:00",
+        "comment": {
+          "total": 3,
+          "comments": [
+            {
+              "id": "ESD-1235-0",
+              "author": {
+                "name": "customer"
+              },
+              "body": "기본 trigger voltage뿐 아니라 holding current도 결과표에 넣어 주세요.",
+              "created": "2026-11-12T09:00:00+09:00"
+            },
+            {
+              "id": "ESD-1235-1",
+              "author": {
+                "name": "mingyu.cho"
+              },
+              "body": "추가 조건을 확인 중입니다. simulation 실행과 결과 검토는 아직 수행하지 않았습니다.",
+              "created": "2026-11-13T09:00:00+09:00"
+            },
+            {
+              "id": "ESD-1235-2",
+              "author": {
+                "name": "customer"
+              },
+              "body": "알림 본문에서 생략된 추가 조건: 동일 코너마다 clamp leakage도 같이 저장하고 netlist 버전을 결과표에 적어 주세요.",
+              "created": "2026-11-14T09:00:00+09:00"
+            }
+          ]
+        },
+        "attachment": []
+      }
+    },
+    "ESD-1236": {
+      "id": "1236",
+      "key": "ESD-1236",
+      "fields": {
+        "summary": "[샘플] 다른 담당자의 GPIO v1.4.1 DB release 진행 공유",
+        "description": "[합성 JIRA fixture · 원격 서버 접속 없음]\n담당자는 박지훈(jihoon.park)이며 조민규(mingyu.cho)는 watcher로만 포함됐습니다. 이 업무에서 조민규에게 별도 답변이나 신규 수행 요청은 없습니다.",
+        "status": {
+          "name": "In Review"
+        },
+        "assignee": {
+          "name": "jihoon.park",
+          "displayName": "박지훈"
+        },
+        "updated": "2026-11-14T09:00:00+09:00",
+        "comment": {
+          "total": 3,
+          "comments": [
+            {
+              "id": "ESD-1236-0",
+              "author": {
+                "name": "jihoon.park"
+              },
+              "body": "2026-11-13에 LVS clean과 checksum 검증을 완료하고 고객 전달 목록을 작성했습니다. 수행자는 박지훈입니다.",
+              "created": "2026-11-12T09:00:00+09:00"
+            },
+            {
+              "id": "ESD-1236-1",
+              "author": {
+                "name": "release.bot"
+              },
+              "body": "2026-11-14에 DB package staging이 완료됐습니다. 자동화 시스템의 작업 결과입니다.",
+              "created": "2026-11-13T09:00:00+09:00"
+            },
+            {
+              "id": "ESD-1236-2",
+              "author": {
+                "name": "customer"
+              },
+              "body": "11월 20일 release 일정 확인했습니다. 최종 전달은 담당자 박지훈 님에게 요청하겠습니다.",
+              "created": "2026-11-14T09:00:00+09:00"
+            }
+          ]
+        },
+        "attachment": []
+      }
+    }
+  }
+}

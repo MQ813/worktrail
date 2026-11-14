@@ -1,0 +1,8 @@
+[Unit]
+Description=Read-only mail and JIRA collection
+[Service]
+Type=oneshot
+WorkingDirectory=%h/mail-jira
+EnvironmentFile=-%h/.config/mail-jira/secrets.env
+ExecStart=%h/mail-jira/.venv/bin/mail-jira --config %h/mail-jira/config/corporate.toml poll --once
+UMask=0077
