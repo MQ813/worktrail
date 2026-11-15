@@ -17,6 +17,14 @@ class FakeRunner:
         from .project_ai import CommandResult
 
         pid = request.project_id
+        if request.mode == "search":
+            return CommandResult(
+                outcome="search",
+                matches=[
+                    dict(project_id=p["id"], reason="합성 테스트 검색 결과")
+                    for p in request.projects[:20]
+                ],
+            )
         if request.mode == "update" and not pid:
             return CommandResult(question="프로젝트를 선택하세요.")
         source = next(

@@ -75,10 +75,15 @@ try:
         page = browser.new_page(locale="ko-KR", reduced_motion="reduce")
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
-        page.goto(base + "/projects")
-        assert page.get_by_role("button", name="+ 신규 프로젝트").count() > 0
-        page.get_by_role("button", name="+ 신규 프로젝트").first.click()
-        page.wait_for_url("**/projects/*", timeout=30000)
+        page.goto(base + "/projects?tab=connections")
+        page.get_by_role(
+            "link", name="AI로 프로젝트 찾기·정리", exact=True
+        ).first.click()
+        page.locator("#ai-submit").click()
+        page.locator("#ai-proposal-form").wait_for(timeout=30000)
+        page.get_by_role("button", name="변경안 반영", exact=True).click()
+        page.get_by_role("link", name="변경 검토에서 보기", exact=True).click()
+        page.wait_for_url("**/projects/*?view=review", timeout=30000)
         pid = urlsplit(page.url).path.rsplit("/", 1)[1]
         assert page.get_by_role("heading", name="AI 반영 · 미확인 · #1").count() == 1
         page.get_by_role("button", name="내용 확인", exact=True).click()

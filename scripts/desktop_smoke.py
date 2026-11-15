@@ -9,6 +9,7 @@ import subprocess
 import time
 import urllib.error
 import urllib.request
+import uuid
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -76,6 +77,37 @@ def main():
                 "/api/projects/{pid}/replay-history"
                 in request(base, "/openapi.json")["paths"]
             )
+            for tab in ("list", "connections", "new", "ai", "history"):
+                with urllib.request.urlopen(
+                    base + "/projects?tab=" + tab, timeout=5
+                ) as response:
+                    html = response.read().decode("utf-8")
+                assert 'aria-label="프로젝트 탐색"' in html
+                assert "JOB 폴더 가져오기" not in html
+                assert ('id="ai-workspace-form"' in html) == (tab == "ai")
+            key = uuid.uuid4().hex
+            request(
+                base,
+                "/api/project-ai",
+                dict(
+                    text="네이티브 AI 변경안 저장 검증",
+                    mode="create",
+                    preview=True,
+                    include_subissues=True,
+                    request_key=key,
+                ),
+            )
+            deadline = time.monotonic() + 8
+            while time.monotonic() < deadline:
+                proposal = request(base, "/api/project-ai/" + key)
+                if proposal["state"] == "ready":
+                    break
+                time.sleep(0.2)
+            assert proposal["state"] == "ready", proposal
+            assert proposal["project_id"] is None
+            applied = request(base, "/api/project-ai/" + key + "/apply", {})
+            assert applied["project_id"]
+            assert request(base, "/api/project-ai/" + key)["state"] == "applied"
             linked = request(
                 base,
                 "/api/projects/link",
@@ -162,7 +194,13 @@ def main():
                 "worker restart while API responds",
                 "backend exit",
                 "persistent activity on relaunch",
-                *(["project link/page/automatic update"] if args.projects else []),
+                *(
+                    [
+                        "project tabs, staged AI create/apply, project link/page/automatic update"
+                    ]
+                    if args.projects
+                    else []
+                ),
             ],
             report=str(root / "smoke.json"),
         )

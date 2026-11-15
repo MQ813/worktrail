@@ -121,7 +121,7 @@ def test_legacy_nonwork_queue_is_hidden_and_pruned_without_losing_inquiries(tmp_
             "INSERT OR REPLACE INTO project_unassigned VALUES(?,?,'[]')",
             (iid, latest(db, iid)),
         )
-    html = client.get("/projects").text
+    html = client.get("/projects?tab=connections").text
     assert (
         "AD_LEGACY"
         not in html.split('id="project-connections"')[1].split(
@@ -171,7 +171,7 @@ def test_real_connection_has_evidence_validates_revision_and_never_creates_proje
     iid = ids["MAIL_REVIEW"]
     db = connect(runtime)
     version = latest(db, iid)
-    page = client.get("/projects").text
+    page = client.get("/projects?tab=connections").text
     assert "기존 프로젝트 찾기" not in page
     assert "기존 프로젝트에 연결" in page and "선택한 프로젝트에 연결" in page
     assert "검토 이유" in page and "업무 변경 근거" in page

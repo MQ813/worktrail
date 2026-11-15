@@ -236,7 +236,7 @@ def create_app(runtime, kb=None, jira_servers=(), *, sample_mode=False):
                 "<p>메일 14건 + 연결 JIRA 3건 · 내 역할: 조민규. JIRA는 로컬 fixture를 조회합니다. 이미지 캡처는 직접 확인이 필요합니다.</p></details>"
             )
         return HTMLResponse(
-            '<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>WorkTrail</title><link rel="stylesheet" href="/static/app.css"><script src="/static/app.js" defer></script></head><body><a class="skip-link" href="#main">본문으로 건너뛰기</a><div class="shell"><aside class="sidebar"><a class="brand" href="/"><span class="brand-mark" aria-hidden="true">w.</span>WorkTrail</a><nav class="nav" aria-label="주 메뉴">'
+            '<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>WorkTrail</title><link rel="stylesheet" href="/static/app.css"><link rel="stylesheet" href="/static/projects.css"><script src="/static/app.js" defer></script><script src="/static/projects.js" defer></script></head><body><a class="skip-link" href="#main">본문으로 건너뛰기</a><div class="shell"><aside class="sidebar"><a class="brand" href="/"><span class="brand-mark" aria-hidden="true">w.</span>WorkTrail</a><nav class="nav" aria-label="주 메뉴">'
             + nav
             + '</nav><footer class="sidebar-status">'
             + context

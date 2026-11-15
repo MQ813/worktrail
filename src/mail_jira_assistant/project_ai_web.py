@@ -29,12 +29,46 @@ def attach(app, runtime, guarded):
             ).fetchone()
             if not row:
                 raise ValueError("요청이 없습니다.")
+            result = json.loads(row["result"]) if row["result"] else None
+            ids = (
+                {m["project_id"] for m in result.get("matches", [])}
+                if result
+                else set()
+            )
+            if result:
+                ids.add(result.get("project_id"))
             return {
-                k: row[k]
-                for k in ("state", "project_id", "question", "job_state", "error")
+                **{
+                    k: row[k]
+                    for k in ("state", "project_id", "question", "job_state", "error")
+                },
+                "request_id": key,
+                "input": json.loads(row["input"]),
+                "result": result,
+                "projects": [
+                    {
+                        k: p[k]
+                        for k in (
+                            "id",
+                            "code",
+                            "name",
+                            "entries",
+                            "work_items",
+                            *ai.FIELDS,
+                        )
+                        if k in p
+                    }
+                    for p in json.loads(row["context"])["projects"]
+                    if p["id"] in ids
+                ],
             }
 
         return guarded(lambda: transaction(read))
+
+    @app.post("/api/project-ai/{key}/apply")
+    def apply_proposal(key: str, data: ai.ProposalEdits):
+        pid = guarded(lambda: transaction(lambda db: ai.apply_proposal(db, key, data)))
+        return {"project_id": pid, "redirect": f"/projects/{pid}?view=review"}
 
     @app.post("/api/project-ai/history/{hid}/confirm")
     def confirm(hid: int):

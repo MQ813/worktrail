@@ -56,14 +56,14 @@ def test_unassigned_legacy_records_can_be_assigned_without_loss(tmp_path):
         pid = project_updates.ensure_project(db, "Assigned")
     db.close()
     client = TestClient(create_app(tmp_path, tmp_path))
-    assert "LEGACY_PRESERVED" in client.get("/projects").text
+    assert "LEGACY_PRESERVED" in client.get("/projects?tab=connections").text
     response = client.post(
         f"/api/activities/{aid}/assign-project", json={"project_id": pid, "version": 1}
     )
     assert response.status_code == 200
     assert f"/projects/{pid}?edit={aid}" in response.json()["redirect"]
     assert "LEGACY_PRESERVED" in client.get(f"/projects/{pid}?view=records").text
-    assert "LEGACY_PRESERVED" not in client.get("/projects").text
+    assert "LEGACY_PRESERVED" not in client.get("/projects?tab=connections").text
     assert client.get(f"/api/activities/{aid}/history").json()["edits"]
     assert (
         client.post(

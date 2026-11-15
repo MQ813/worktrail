@@ -18,6 +18,13 @@ class Strict(BaseModel):
 class Create(Strict):
     name: str = Field(min_length=1, max_length=300)
     code: str | None = None
+    purpose: str = Field(default="", max_length=5000)
+    owner: str = Field(default="", max_length=300)
+    process: str = Field(default="TBD", max_length=300)
+    development_target: str = Field(default="TBD", max_length=300)
+    target_on: str = "TBD"
+    started_on: str = ""
+    spec: str = Field(default="TBD", max_length=5000)
 
 
 class Selection(Strict):
@@ -116,7 +123,38 @@ def attach(app, runtime, page, esc, render_records):
             db = connect(runtime)
             try:
                 with db:
-                    return projects.ensure_project(db, data.name, data.code)
+                    if not data.name.strip():
+                        raise ValueError("프로젝트 이름을 입력하세요.")
+                    if db.execute(
+                        "SELECT 1 FROM projects WHERE name=?", (data.name.strip(),)
+                    ).fetchone():
+                        raise ValueError(
+                            "같은 이름의 프로젝트가 있습니다. 목록에서 기존 프로젝트를 확인하세요."
+                        )
+                    from datetime import date
+
+                    for value in (data.target_on, data.started_on):
+                        if value not in ("", "TBD"):
+                            date.fromisoformat(value)
+                    pid = projects.ensure_project(db, data.name.strip(), data.code)
+                    for field in (
+                        "purpose",
+                        "owner",
+                        "process",
+                        "development_target",
+                        "target_on",
+                        "started_on",
+                        "spec",
+                    ):
+                        db.execute(
+                            f"UPDATE projects SET {field}=? WHERE id=?",
+                            (getattr(data, field), pid),
+                        )
+                    db.execute(
+                        "INSERT INTO audit(kind,target,detail,created) VALUES('project_manual_create',?,?,strftime('%s','now'))",
+                        (str(pid), data.model_dump_json()),
+                    )
+                    return pid
             finally:
                 db.close()
 
@@ -148,10 +186,6 @@ def attach(app, runtime, page, esc, render_records):
             "id": data.project_id,
             "redirect": f"/projects/{data.project_id}?edit={aid}#record-editor",
         }
-
-    @app.post("/api/projects/import-folder")
-    def import_folder(data: PathInput):
-        return {"id": guarded(lambda: projects.import_folder(runtime, data.path))}
 
     @app.put("/api/projects/{pid}")
     def edit(pid: int, data: Metadata):
@@ -352,96 +386,90 @@ def attach(app, runtime, page, esc, render_records):
         q: str = "",
         attention: str = "",
         project_id: int = 0,
+        tab: str = "",
+        state: str = "",
     ):
+        from . import project_directory as directory
+        from .project_views import index_table
+
+        tab = tab or ("connections" if activity or inquiry or project_id else "list")
+        if tab not in ("list", "connections", "new", "ai", "history"):
+            raise HTTPException(404, "프로젝트 화면이 없습니다.")
         rows = query(
             "SELECT p.*,(SELECT count(*) FROM project_work_items w WHERE w.project_id=p.id) AS issue_count,(SELECT count(*) FROM project_changes c WHERE c.project_id=p.id AND c.review='pending') AS pending,(SELECT count(*) FROM project_ai_history h WHERE h.project_id=p.id AND h.confirmed=0 AND h.reverted=0) AS unconfirmed FROM projects p ORDER BY p.code"
         )
-        from .project_views import index_table
-
-        body = index_table(rows, esc, q, attention)
-        body += '<details class="entry-composer" id="new-project"><summary>새 프로젝트</summary><form data-project-api="/api/projects"><label>프로젝트 이름<input name="name" required maxlength="300"></label><button class="primary">프로젝트 만들기</button><p role="alert" class="form-feedback"></p></form></details>'
-        body += (
-            f'<details class="card spaced" id="ai-project-request"{" open" if inquiry else ""}><summary>AI로 프로젝트 생성·업데이트</summary>'
-            + project_ai_web.form(query, esc, iid=inquiry)
-            + "</details>"
-        )
-        requests = query(
-            "SELECT r.*,j.state AS job_state,j.error,p.code,p.name FROM project_ai_requests r LEFT JOIN jobs j ON j.request_id=r.id AND j.kind='project_command' LEFT JOIN projects p ON p.id=r.project_id ORDER BY r.created DESC LIMIT 20"
-        )
-        if requests:
-            body += '<details class="card spaced"><summary>최근 AI 요청 · 결과·실패 확인</summary><a href="/projects">결과 새로고침</a>'
-            for r in requests:
-                label = {"applied": "반영 완료", "needs_input": "추가 정보 필요"}.get(
-                    r["state"],
-                    {
-                        "pending": "대기",
-                        "running": "처리 중",
-                        "retry_wait": "재시도 대기",
-                        "failed": "실패",
-                        "succeeded": "완료",
-                    }.get(r["job_state"], r["job_state"]),
-                )
-                body += f'<p class="project-text">{esc(label)} · {esc(json.loads(r["input"])["text"])} {esc(r["question"] or r["error"] or "")}'
-                if r["project_id"]:
-                    body += f' <a href="/projects/{r["project_id"]}">{esc(r["code"])} · {esc(r["name"])}</a>'
-                body += "</p>"
-            body += "</details>"
-        from . import worklog
-
-        unassigned = [
-            r for r in worklog.records(runtime) if r["resolved_project_id"] is None
-        ]
-        if unassigned:
-            body += '<section class="card spaced" id="unassigned-records"><h2>프로젝트 연결이 필요한 수행 기록</h2>'
-            for r in unassigned:
-                options = "".join(
-                    f'<option value="{p["id"]}">{esc(p["code"])} · {esc(p["name"])}</option>'
-                    for p in rows
-                )
-                body += f'<form data-project-api="/api/activities/{r["id"]}/assign-project" data-version="{r["version"]}"><p>{esc(r["description"])}</p><label>연결할 프로젝트<select name="project_id" required><option value="">프로젝트 선택</option>{options}</select></label><button>프로젝트에 연결</button><p role="alert" class="form-feedback"></p></form>'
-            body += "</section>"
         db = connect(runtime)
         try:
             unresolved = projects.unassigned_candidates(db)
         finally:
             db.close()
-        body += f'<details class="card spaced" id="project-connections"{" open" if unresolved else ""}><summary>프로젝트 연결 검토 · {len(unresolved)}건</summary>'
-        if not unresolved:
-            body += '<p class="empty empty-compact">프로젝트 연결을 검토할 문의가 없습니다.</p>'
-        for u in unresolved:
-            body += f'<article class="project-candidate"><h3><a class="text-link" href="/inquiries/{esc(u["inquiry_id"])}">{esc(u["subject"])}</a></h3><p class="candidate-reason">검토 이유 · {esc(u["reason"])}</p>'
-            if u["evidence"]:
-                body += f'<details class="candidate-evidence"><summary>업무 변경 근거</summary><blockquote class="project-text">{esc(u["evidence"])}</blockquote></details>'
-            body += (
-                f'<p class="muted">연결 단서 · {esc(" · ".join(u["hints"]))}</p>'
-                if u["hints"]
-                else '<p class="muted">특정 프로젝트를 식별할 단서가 없습니다. 원문을 확인해 연결할 프로젝트를 선택하세요.</p>'
-            )
-            body += f'<div class="toolbar"><button class="project-ai-create" data-inquiry="{esc(u["inquiry_id"])}">+ 신규 프로젝트</button><button data-command="/api/project-ai/dismiss/{esc(u["inquiry_id"])}" data-reload="true">프로젝트 관리 대상 아님</button></div><p role="status" class="form-feedback"></p>'
-            body += '<details class="candidate-link"><summary>기존 프로젝트에 연결</summary>'
-            if rows:
-                options = "".join(
-                    f'<option value="{p["id"]}">{esc(p["code"])} · {esc(p["name"])}</option>'
-                    for p in rows
+        body = '<div class="project-directory-screen">' + directory.header(
+            tab, len(unresolved)
+        )
+        if tab == "list":
+            body += index_table(rows, esc, q, attention, state)
+        elif tab == "new":
+            body += directory.create_form()
+        elif tab == "ai":
+            body += directory.ai_workspace(query, esc, inquiry, project_id)
+        elif tab == "history":
+            body += directory.request_history(query, esc)
+        else:
+            from . import worklog
+
+            unassigned = [
+                r for r in worklog.records(runtime) if r["resolved_project_id"] is None
+            ]
+            if unassigned:
+                body += '<section class="card spaced" id="unassigned-records"><h2>프로젝트 연결이 필요한 수행 기록</h2>'
+                for r in unassigned:
+                    options = "".join(
+                        f'<option value="{p["id"]}">{esc(p["code"])} · {esc(p["name"])}</option>'
+                        for p in rows
+                    )
+                    body += f'<form data-project-api="/api/activities/{r["id"]}/assign-project" data-version="{r["version"]}"><p>{esc(r["description"])}</p><label>연결할 프로젝트<select name="project_id" required><option value="">프로젝트 선택</option>{options}</select></label><button>프로젝트에 연결</button><p role="alert" class="form-feedback"></p></form>'
+                body += "</section>"
+            db = connect(runtime)
+            try:
+                unresolved = projects.unassigned_candidates(db)
+            finally:
+                db.close()
+            body += f'<details class="card spaced" id="project-connections"{" open" if unresolved else ""}><summary>프로젝트 연결 검토 · {len(unresolved)}건</summary>'
+            if not unresolved:
+                body += '<p class="empty empty-compact">프로젝트 연결을 검토할 문의가 없습니다.</p>'
+            for u in unresolved:
+                body += f'<article class="project-candidate"><h3><a class="text-link" href="/inquiries/{esc(u["inquiry_id"])}">{esc(u["subject"])}</a></h3><p class="candidate-reason">검토 이유 · {esc(u["reason"])}</p>'
+                if u["evidence"]:
+                    body += f'<details class="candidate-evidence"><summary>업무 변경 근거</summary><blockquote class="project-text">{esc(u["evidence"])}</blockquote></details>'
+                body += (
+                    f'<p class="muted">연결 단서 · {esc(" · ".join(u["hints"]))}</p>'
+                    if u["hints"]
+                    else '<p class="muted">특정 프로젝트를 식별할 단서가 없습니다. 원문을 확인해 연결할 프로젝트를 선택하세요.</p>'
                 )
-                body += f'<form data-project-api="/api/projects/connect/{esc(u["inquiry_id"])}"><input type="hidden" name="revision" value="{u["revision_id"]}"><label>연결할 프로젝트<select name="project_id" required><option value="">프로젝트를 선택하세요</option>{options}</select></label><p class="muted">선택한 프로젝트에 연결한 뒤 업데이트 생성을 요청합니다. 결과는 프로젝트의 변경 검토에서 확인합니다.</p><button>선택한 프로젝트에 연결</button><p role="status" class="form-feedback"></p></form>'
-            else:
-                body += '<p class="muted">아직 연결할 프로젝트가 없습니다. 먼저 프로젝트를 추가하세요.</p><a class="text-link" href="#new-project">프로젝트 추가 →</a>'
-            body += "</details></article>"
-        opts = "".join(
-            f'<option value="{esc(p["name"])}"{" selected" if p["id"] == project_id else ""}>{esc(p["code"])} · {esc(p["name"])}</option>'
-            for p in rows
-        )
-        body += f'</details><details class="card spaced"{" open" if inquiry or project_id else ""}><summary>메일·Jira를 프로젝트에 연결</summary><form id="project-form"><label>관련 문의<select name="inquiry_id" required>'
-        body += "".join(
-            f'<option value="{esc(i["id"])}" {"selected" if i["id"] == inquiry else ""}>{esc(i["subject"])}</option>'
-            for i in query(
-                "SELECT s.id,s.subject FROM inquiries i JOIN sources s ON s.id=i.id"
+                body += f'<div class="toolbar"><a class="button" href="/projects?tab=ai&amp;inquiry={esc(u["inquiry_id"])}">AI로 프로젝트 찾기·정리</a><button data-command="/api/project-ai/dismiss/{esc(u["inquiry_id"])}" data-reload="true">프로젝트 관리 대상 아님</button></div><p role="status" class="form-feedback"></p>'
+                body += '<details class="candidate-link"><summary>기존 프로젝트에 연결</summary>'
+                if rows:
+                    options = "".join(
+                        f'<option value="{p["id"]}">{esc(p["code"])} · {esc(p["name"])}</option>'
+                        for p in rows
+                    )
+                    body += f'<form data-project-api="/api/projects/connect/{esc(u["inquiry_id"])}"><input type="hidden" name="revision" value="{u["revision_id"]}"><label>연결할 프로젝트<select name="project_id" required><option value="">프로젝트를 선택하세요</option>{options}</select></label><p class="muted">선택한 프로젝트에 연결한 뒤 업데이트 생성을 요청합니다. 결과는 프로젝트의 변경 검토에서 확인합니다.</p><button>선택한 프로젝트에 연결</button><p role="status" class="form-feedback"></p></form>'
+                else:
+                    body += '<p class="muted">아직 연결할 프로젝트가 없습니다. 먼저 프로젝트를 추가하세요.</p><a class="text-link" href="/projects?tab=new">프로젝트 추가 →</a>'
+                body += "</details></article>"
+            opts = "".join(
+                f'<option value="{esc(p["name"])}"{" selected" if p["id"] == project_id else ""}>{esc(p["code"])} · {esc(p["name"])}</option>'
+                for p in rows
             )
-        )
-        body += f'</select></label><label>프로젝트<select name="project" required>{opts}</select></label><button>연결하고 업데이트 생성</button></form></details>'
-        body += '<details class="card spaced"><summary>기존 JOB 폴더 가져오기</summary><form data-project-api="/api/projects/import-folder"><label>프로젝트 폴더 전체 경로<input name="path" required placeholder="D:\\worklog\\JOB-006"></label><button>원본 보존 후 가져오기</button><p role="alert" class="form-feedback"></p></form></details>'
-        return page(body, "projects")
+            body += f'</details><details class="card spaced"{" open" if inquiry or project_id else ""}><summary>메일·Jira를 프로젝트에 연결</summary><form id="project-form"><label>관련 문의<select name="inquiry_id" required>'
+            body += "".join(
+                f'<option value="{esc(i["id"])}" {"selected" if i["id"] == inquiry else ""}>{esc(i["subject"])}</option>'
+                for i in query(
+                    "SELECT s.id,s.subject FROM inquiries i JOIN sources s ON s.id=i.id"
+                )
+            )
+            body += f'</select></label><label>프로젝트<select name="project" required>{opts}</select></label><button>연결하고 업데이트 생성</button></form></details>'
+        return page(body + "</div>", "projects")
 
     @app.get("/projects/{pid}")
     def detail(

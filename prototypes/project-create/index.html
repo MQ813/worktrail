@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>WorkTrail · 프로젝트 미리보기</title>
+  <link rel="icon" href="../../assets/WorkTrail.ico">
+  <link rel="stylesheet" href="../../src/mail_jira_assistant/static/app.css">
+  <link rel="stylesheet" href="preview.css">
+  <script src="preview.js" defer></script>
+</head>
+<body class="prototype">
+  <a class="skip-link" href="#main">본문으로 건너뛰기</a>
+  <div class="shell">
+    <aside class="sidebar">
+      <a class="brand" href="#/projects"><span class="brand-mark" aria-hidden="true">w.</span>WorkTrail</a>
+      <nav class="nav" aria-label="주 메뉴">
+        <span class="prototype-nav-item" aria-disabled="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 2v4m8-4v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14H3V6a2 2 0 0 1 2-2"/></svg>오늘</span>
+        <span class="prototype-nav-item" aria-disabled="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v16H3zM3 13h5l2 3h4l2-3h5"/></svg>문의함</span>
+        <a class="active" aria-current="page" href="#/projects"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h7l2 2h9v12H3zM3 6V4h7l2 2"/></svg>프로젝트</a>
+        <span class="prototype-nav-item" aria-disabled="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>운영 상태</span>
+      </nav>
+      <footer class="prototype-notice"><strong>화면 미리보기</strong><p>예시 데이터입니다.<br>실제 AI 실행·저장은 하지 않습니다.</p></footer>
+    </aside>
+    <div class="workspace"><main class="main prototype-main" id="main" tabindex="-1">
+        <header class="project-top"><h1>프로젝트</h1><span class="preview-tag">미리보기</span></header>
+        <nav class="project-tabs" aria-label="프로젝트 탐색">
+          <a href="#/projects" data-destination="list">프로젝트 목록</a>
+          <a href="#/projects/connections" data-destination="connections">연결 검토 <span>1</span></a>
+          <a href="#/projects/new" data-destination="new">프로젝트 추가</a>
+          <a href="#/projects/ai" data-destination="ai">AI</a>
+          <a href="#/projects/history" data-destination="history">작업 이력</a>
+        </nav>
+      <div id="directory-screen">
+        <section id="list-panel">
+          <form class="workspace-filter" id="list-filter"><label>프로젝트 검색<input type="search" id="project-search" placeholder="프로젝트 이름, 목적, 번호"></label><label>상태<select id="project-state"><option value="">전체 상태</option><option value="진행 중">진행 중</option><option value="보류">보류</option></select></label><button>검색</button></form>
+          <div class="section-heading"><h2>프로젝트 목록</h2><span id="result-count" role="status">전체 3개</span></div>
+          <div class="scroll"><table class="prototype-project-table"><thead><tr><th>프로젝트 / 목적</th><th>상태</th><th>담당자</th><th>목표 일정</th><th>하위 이슈</th></tr></thead><tbody id="project-rows"></tbody></table></div>
+          <p class="empty" id="no-results" hidden>검색 결과가 없습니다. 검색 조건을 바꿔 주세요.</p>
+        </section>
+        <section id="connections-panel" hidden>
+          <div class="section-heading"><h2>연결 검토</h2><span>미연결 문의 1건</span></div>
+          <article class="connection-example"><span class="source-badge source-badge--inbound">받은 메일</span><h3>GPIO 3.3V 계열 검증 일정 확인 요청</h3><p>검토 이유 · 검증 일정 변경</p><blockquote>3.3V 계열의 검증 시작일을 12월 7일로 변경하고, 기존 testbench 조건을 유지해 주세요.</blockquote><div class="example-connection-form"><label>연결할 프로젝트<select><option>JOB-028 · Atlas GPIO Library 개발</option><option>JOB-041 · Orion ADC 검증</option></select></label><button type="button" data-demo-notice="선택한 프로젝트와 연결 결과를 이곳에서 확인하는 구성입니다. 실제 연결은 실행하지 않았습니다.">선택한 프로젝트에 연결</button></div><p class="prototype-feedback" role="status"></p></article>
+        </section>
+        <section id="history-panel" hidden>
+          <div class="section-heading"><h2>작업 이력</h2><span id="history-count">최근 요청 3건</span></div>
+          <div class="scroll"><table class="history-table"><thead><tr><th>요청 내용</th><th>대상 프로젝트</th><th>처리 상태</th><th>요청 시각</th></tr></thead><tbody id="history-rows"></tbody></table></div>
+        </section>
+      </div>
+
+      <div id="create-screen" hidden>
+        <div class="creation-layout">
+          <div class="creation-editor">
+            <form id="details-form" novalidate>
+              <div class="section-heading"><h2>기본 정보</h2><button type="button" class="text-button" id="fill-example">예시 입력</button></div>
+              <label for="project-name">프로젝트 이름 <span class="required-label">필수</span></label><input id="project-name" name="name" placeholder="예: Atlas GPIO Library 개발" maxlength="300" required aria-describedby="name-error"><p class="field-error" id="name-error" hidden></p>
+              <label for="project-purpose">목적·산출물 <span class="required-label">필수</span></label><textarea id="project-purpose" name="purpose" placeholder="어떤 일을 완료하고, 무엇을 전달할지 적어 주세요." maxlength="5000" required aria-describedby="purpose-error"></textarea><p class="field-error" id="purpose-error" hidden></p>
+              <div class="creation-fields"><label>공정<input id="project-process" name="process" placeholder="예: 28nm" maxlength="300"></label><label>개발 대상<input id="project-target" name="target" placeholder="예: GPIO Library · 1.8V / 3.3V" maxlength="300"></label><label>담당자<input id="project-owner" name="owner" placeholder="담당자 또는 팀 이름" maxlength="300"></label><label>목표 일정<input type="date" id="project-date" name="date"></label></div>
+              <details class="optional-fields" id="spec-fields"><summary>Spec·추가 정보 <span>선택</span></summary><label>Spec<textarea id="project-spec" name="spec" placeholder="전압, 온도, 검증 조건 등" maxlength="5000"></textarea></label><label>시작일<input type="date" id="project-start" name="start"></label></details>
+              <div class="creation-actions"><button class="primary">프로젝트 만들기</button><a class="button" href="#/projects">취소</a><span class="action-note">미리보기에서는 저장하지 않습니다.</span></div><p role="alert" class="field-error" id="form-feedback" hidden></p>
+            </form>
+          </div>
+          <aside class="creation-summary" aria-labelledby="summary-title"><div class="section-heading"><h2 id="summary-title">작성 내용</h2><span id="summary-origin">직접 입력</span></div><div class="summary-document"><span class="project-code">프로젝트 번호 · 자동 부여</span><h3 id="summary-name">새 프로젝트</h3><p id="summary-purpose" class="muted">프로젝트 이름과 목적을 입력하면 이곳에서 한눈에 확인할 수 있습니다.</p><dl id="summary-facts"><div><dt>공정</dt><dd data-summary="process">미지정</dd></div><div><dt>개발 대상</dt><dd data-summary="target">미지정</dd></div><div><dt>담당자</dt><dd data-summary="owner">미지정</dd></div><div><dt>목표 일정</dt><dd data-summary="date">미정</dd></div></dl><div id="summary-spec-block" hidden><h4>Spec</h4><p id="summary-spec"></p></div></div><p class="summary-note">생성 후 프로젝트 개요와<br>하위 이슈를 구분해서 관리합니다.</p></aside>
+        </div>
+      </div>
+
+      <section id="ai-screen" hidden aria-labelledby="ai-heading">
+        <h2 id="ai-heading" class="sr-only">AI 프로젝트 작업</h2>
+        <div class="ai-workspace">
+          <div class="ai-composer creation-editor">
+            <form id="ai-form" novalidate>
+              <div class="section-heading"><h2>AI에게 요청</h2><button type="button" class="text-button" id="ai-reset">새 요청</button></div>
+              <label for="ai-request">요청할 내용 <span class="required-label">필수</span></label>
+              <textarea id="ai-request" aria-describedby="ai-help ai-error" placeholder="프로젝트를 찾거나, 새로 만들거나, 기존 내용을 수정해 주세요. 메일 내용을 그대로 붙여 넣어도 됩니다." maxlength="8000" required></textarea>
+              <p class="muted" id="ai-help">여러 작업을 한 번에 요청할 수 있습니다.</p><p class="field-error" id="ai-error" hidden></p>
+              <div class="ai-examples" role="group" aria-label="요청 예시"><span>예시</span><button type="button" data-ai-example="create">신규 생성</button><button type="button" data-ai-example="update">내용 수정</button><button type="button" data-ai-example="search">검색</button><button type="button" data-ai-example="auto">찾아서 정리</button></div>
+              <label for="ai-target">대상 프로젝트</label>
+              <select id="ai-target" aria-describedby="ai-target-help"><option value="auto">요청 내용에서 찾기</option><option value="new">새 프로젝트</option></select>
+              <p class="muted" id="ai-target-help">수정할 프로젝트를 알고 있다면 직접 선택하세요.</p>
+              <details class="optional-fields"><summary>참고 문의 <span>선택</span></summary><label class="check-row"><input type="checkbox" id="ai-reference" aria-describedby="reference-preview">GPIO 3.3V 계열 검증 일정 확인 요청</label><p class="reference-preview" id="reference-preview">“3.3V 계열 PVT 검증은 12월 7일 시작, 기존 testbench 조건 유지” · 받은 메일</p></details>
+              <div class="creation-actions"><button class="primary" id="ai-submit">요청 실행</button><span class="action-note">실제 AI 대신 결과 예시를 보여줍니다.</span></div>
+              <p id="ai-progress" class="prototype-feedback" role="status"></p>
+            </form>
+
+          </div>
+          <section class="ai-output" aria-labelledby="ai-output-title" aria-busy="false">
+            <div class="section-heading"><h2 id="ai-output-title" tabindex="-1">결과 예시</h2><span id="ai-result-kind">요청 대기</span></div>
+            <div id="ai-output-body"><div class="ai-empty"><h3>요청한 작업을 이곳에서 확인합니다</h3><p>찾은 프로젝트, 수정할 내용, 새로 만들 내용을 구분해서 보여줍니다.</p><ol><li>내용과 일치하는 프로젝트 확인</li><li>생성·수정할 내용 확인 및 편집</li><li>반영 결과를 목록과 작업 이력에서 확인</li></ol><p class="muted">왼쪽의 요청 예시로 흐름을 살펴보세요.</p></div></div>
+          </section>
+        </div>
+      </section>
+
+      <div id="result-screen" hidden><div class="project-back"><a href="#/projects">← 프로젝트 목록</a></div><header class="project-top"><div><span class="project-code">생성 후 화면 예시</span><h2 id="result-name">Atlas GPIO Library 개발</h2></div><a class="button" id="return-to-form" href="#/projects/new">입력 내용 수정</a></header><p class="preview-result-status" role="status">작성한 내용으로 보는 화면 예시입니다. 실제 프로젝트는 생성하지 않았습니다.</p><div class="result-layout"><section><h2>프로젝트 목적</h2><p id="result-purpose" class="project-text"></p><div class="content-section result-empty"><h2>하위 이슈</h2><p class="muted" id="result-issues">아직 추가한 하위 이슈가 없습니다.</p></div></section><aside class="project-facts"><h2>기본 정보</h2><dl id="result-facts"></dl></aside></div></div>
+    </main></div>
+  </div>
+  <noscript><p>화면을 전환하려면 JavaScript를 켜 주세요. 이 미리보기는 서버에 정보를 보내지 않습니다.</p></noscript>
+</body>
+</html>

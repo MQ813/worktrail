@@ -1,3 +1,53 @@
+## 승인한 5개 탭·AI 작업 공간의 실제 앱 반영 (2026-11-15)
+
+프로토타입 승인을 받아 프로젝트 목록 / 연결 검토 / 프로젝트 추가 / AI / 작업 이력을 실제 FastAPI HTML/CSS/JavaScript 앱에 연결했다. 직접 입력의 모든 필드를 저장하고, JOB 폴더 가져오기 메뉴/API를 제거했다. 연결 검토는 기존 근거/단서/직접 연결을 유지하며 AI 작업 공간으로 요청을 이어간다. 독립 프로토타입 파일은 설계 참고용으로 보존하며 앱에서 로드하지 않는다.
+
+새 AI 탭은 실제 worker/OpenCode를 사용한다. 생성·수정은 서버에서 같은 반영 로직을 savepoint로 검증한 뒤 변경안만 저장하고, 사용자가 이름·메타데이터·내용을 편집해 반영할 때 프로젝트/원문 버전·범위·근거를 다시 검사한다. 반영 전 프로젝트/연결/변경 이력에는 쓰지 않는다. 사용자 편집은 이력 입력에 보존하며 재반영은 중복 저장하지 않는다. 검색 결과는 제공된 프로젝트 ID만 허용하고 검색 요청의 내용 변경을 거절한다. 공통 내용과 기존 이슈를 함께 수정할 수 있으며, 상세의 기존 공통/선택 이슈 AI 경계는 유지한다. DB 스키마를 바꾸지 않고 기존 JSON 요청에 기본값을 제공한다.
+
+MASTER·검토 기록과 이미 읽은 두 SKILL 원문을 기준으로, 원본 HEAD f6b76575f949707b4e3c37cd86cb44b0b98643e8 / 6ae86f61f520d6ca229d2f40e070410638c908c5를 재확인하고 Taste system/copy, UI UX quick-reference의 입력·탐색 기준을 다시 활용했다. Taste의 실제 업무 내용·같은 정렬선·기존 로컬 토큰/서체·구체적 행동 문구를 채택했다. UI UX Pro Max 검색 `asynchronous request error recovery --domain ux -n 3`에서 Error Recovery / Error Messages / Error Placement를 확인하고, 입력 곁 오류·처리 중/완료 피드백·다시 작성/작업 이력 복귀를 적용했다. deep-linking/state-preservation 기준으로 요청·변경안 URL, 탭 필터 및 작성 중 요청/생성 입력/변경안 편집 보존을 적용했다. 짧은 메타데이터는 한 줄 입력, ISO 날짜는 날짜 선택기, 목적/Spec/기록은 여러 줄 입력으로 구별했다.
+
+전체 디자인 방향을 바꾸지 않아 domain 검색만 실행했다. 다른 프레임워크·외부 폰트·CDN·런타임 UI 라이브러리는 추가하지 않았다. 업무 앱과 승인 시안에 필요하지 않은 사진·히어로·무작위 팔레트·WebGL·장면 효과·마케팅 gate는 적용하지 않았다. 승인된 새 공통 탐색/변경안 규칙은 MASTER에 반영했다.
+
+Computer Use로 실제 샘플 앱의 AI 요청→worker 처리→변경안 직접 편집→DB 반영→프로젝트의 변경 전후/이력 보존을 확인했고, 실제 앱 AI 화면을 열어 두었다. 사용자 업무 DB는 테스트에 쓰지 않았다. 별도의 Edge 자동 검증에서 320/390/768/1024/1440px × 5개 탭과 AI 결과 4종 = 45개 조합, 키보드 건너뛰기/포커스·보이는 라벨·긴 한국어·수평 넘침·생성 저장/재로딩·필수 오류·수정안 편집/반영·검색/빈 결과·조건부 생성/수정·대상 선택·추가 정보·worker 실패/복귀·동시 변경 거절·작업 이력·필터 보존을 통과했다. 페이지 JavaScript 오류와 외부 요청은 0건이었다. 한 줄/날짜 입력 보완 뒤 390/1440px의 생성/수정 4개 조합과 변경안 편집 후 새로고침 보존/날짜 저장도 추가 검증했다. 기존 대비 토큰을 재사용했고 점검한 텍스트 대비는 4.5:1 이상이며 전체 접근성 인증은 아니다.
+
+공통 `scripts/ui_review.py`도 별도 샘플 서버에서 36개 화면/너비와 초안·수행 기록 저장/재로딩을 통과했다. pytest 120개, Ruff, JS 구문 검사, diff whitespace 검사를 통과했다. 실제 OpenCode로 읽기 전용 검색과 기존 대상을 찾아 프로젝트 일정/기존 cell 이슈를 함께 수정하는 변경안 생성·반영을 검증했다. 일반 UI/실패 테스트는 합성 runner이며 실제 모델의 모든 자연어 정확도를 평가한 것은 아니다.
+
+브라우저 결과: `runtime/project-directory-review-1794745474546081600/verification.json`, `general/report.json`, `final-controls.json`, `final-update-1440.png`, `final-create-390.png`. 실제 모델 결과: `runtime/project-directory-live-1794745155963245900/verification.json`. 새 배포물 `dist/WorkTrail-project-ai-tabs/WorkTrail/WorkTrail.exe`의 실제 WebView2 4개 메뉴, 5개 프로젝트 탭/AI 변경안 생성·반영, 기존 프로젝트/이슈, 중복 실행 방지, worker 복구, 종료 시 서버 종료와 재실행 데이터 보존은 `runtime/project-directory-native-20261115/verification.json`에서 통과했다.
+
+---
+
+## 5개 탭·AI 작업 공간 프로토타입 개정 (2026-11-15)
+
+사용자의 후속 요청으로 `prototypes/project-create/`를 프로젝트 목록 / 연결 검토 / 프로젝트 추가 / AI / 작업 이력의 5개 탭으로 바꿨다. JOB 폴더 가져오기 UI·이벤트·전용 스타일을 제거했고, 프로젝트 추가에는 직접 입력만 남겼다. AI를 독립 작업 공간으로 옮겨 자유 요청, 대상 직접 선택/요청에서 찾기, 선택 참고 문의와 생성·업데이트·검색·기존 대상 유무에 따른 처리 결과 예시를 제공한다. 변경 전후/생성안을 직접 편집하고 ‘예시 반영’하면 이 미리보기의 목록과 이력에만 반영된다. 실제 AI·앱 API·DB·실행 파일은 연결하거나 변경하지 않았다.
+
+MASTER와 이전 검토 기록, 두 SKILL 원문과 기준 HEAD `f6b76575f949707b4e3c37cd86cb44b0b98643e8` / `6ae86f61f520d6ca229d2f40e070410638c908c5`, Taste system/copy, UI UX quick-reference의 폼·탐색과 pro-rules의 적용 범위를 다시 확인했다. Taste의 업무 내용 중심, 동일 정렬선·기존 토큰/서체, 구체적인 행동 문구를 채택했다. 요청과 결과는 나란히 두되, 공통 일정과 cell 이슈 변경은 별도 구역으로 표시한다. 원래 아래에 길게 쌓이던 요청 예시는 입력 근처의 짧은 버튼으로 줄였다.
+
+UI UX Pro Max 검색 `navigation feedback user control --domain ux -n 3`의 결과는 Keyboard Navigation / Breadcrumbs / Feedback Loop였다. 키보드 탐색과 보이는 포커스를 채택하고, 결과 직접 편집과 ‘요청 수정’으로 반복할 수 있게 했다. 현재 구조는 한 단계의 탭 탐색이므로 3단계 이상의 breadcrumb는 추가하지 않았다. thumbs up/down 평가 위젯은 화면 흐름 검토 목적에 필요하지 않아 추가하지 않았다. quick-reference의 deep-linking/nav-state-active/state-preservation, input-labels/error-placement/focus-management/submit-feedback을 적용했다. 기존 WorkTrail 디자인의 개별 탐색·입력 개선이므로 전체 디자인 시스템 생성과 다른 프레임워크 가이드는 사용하지 않았다. 업무 앱이므로 히어로·사진·랜덤 팔레트·WebGL·장면 효과·마케팅 gate는 적용하지 않았다. 외부 폰트·CDN·런타임 의존성도 추가하지 않았다.
+
+Computer Use의 실제 브라우저에서 5개 탭, AI 요청 예시, 기존 프로젝트 일정/하위 이슈 변경 전후, 예시 반영→변경된 목록→작업 이력, 작은 화면의 한 열 배치를 확인했다. 입력 영역과 예시 버튼을 줄여 작은 창에서 예시를 더 빨리 찾도록 다듬었다. 기본 창 크기로 복원하고 AI 변경안 화면을 열어 두었다. 별도 자동 검증 중 참고 문의의 원문뿐 아니라 제목도 연결 단서에 포함해야 하는 문제를 수정했다.
+
+Edge 검증: 320/390/768/1024/1440px × 5개 탭 및 AI 결과 4종 = 45개 조합의 수평 넘침·현재 위치·제목·보이는 라벨을 통과했다. 작은 화면의 주요 조작 높이도 확인했다. 직접 입력 필수 오류/첫 입력 포커스/요약/입력 유지, AI 필수 오류·준비 중/완료, 수정안 편집→예시 반영→목록/이력, 신규안 오류/편집/반영, 새 예시 검색과 대상 선택, 자동 일치→수정/불일치→생성, 검색 빈 상태→생성 요청, 대상 충돌/추가 정보와 복귀 포커스, 참고 문의, 뒤로 가기/검색 유지, 건너뛰기/현재 경로 보존, 긴 한국어와 사용자 문자열 이스케이프를 확인했다. JavaScript 오류 0건, 요청은 로컬 정적 자산 GET만 있었고 외부 요청/앱 API 호출은 0건이었다. 점검한 본문/보조문/강조색 대비는 4.5:1 이상이며 전체 접근성 인증은 아니다. 실제 AI 응답의 정확성이나 서버 장애는 검증 대상이 아니다.
+
+결과: `runtime/project-ai-preview-review-1794744016338721800/verification.json`, `final-ai.png`, `ai-create-1440.png`, `ai-update-1440.png`, `ai-search-1440.png`, `ai-auto-1440.png`, `long-korean-390.png`. `node --check`와 `git diff --check`도 통과했다. 본앱 공통 레이아웃 변경이 없어 `scripts/ui_review.py`·앱 기능 테스트·Windows 빌드는 다시 실행하지 않았다. 프로토타입 단계이므로 MASTER의 공통 규칙은 유지한다. 아래 생성 전용 화면 기록은 이전 시안이며 현재 구성은 이번 개정과 `project-navigation-proposal.md`를 따른다.
+
+---
+
+## 생성 전용 화면 프로토타입 (2026-11-15)
+
+사용자 요청에 따라 기존 작업 전체를 먼저 `b4e3ad5`로 커밋했다. 이후 `prototypes/project-create/`에 별도 HTML/CSS/JavaScript 미리보기를 만들었다. 기존 앱의 CSS 토큰과 shell만 참조하며 본앱의 라우트·JS·DB·실행 파일은 바꾸지 않는다. 프로젝트 목록/연결 검토/작업 이력, 추가 전용 화면의 직접 입력/AI로 정리/JOB 폴더 가져오기, 작성 내용 요약과 생성 후 화면 예시를 제공한다. 데이터는 합성 예시이고 입력은 메모리에서만 유지한다. 사용자 범위에 맞춰 실제 저장·AI 호출·파일 선택/읽기는 연결하지 않았다.
+
+두 SKILL 원문과 기준 HEAD `f6b76575f949707b4e3c37cd86cb44b0b98643e8` / `6ae86f61f520d6ca229d2f40e070410638c908c5`를 확인하고 Taste system/copy, UI UX quick-reference의 폼·탐색 기준을 읽었다. Taste의 동일 정렬선·토큰/서체 재사용·업무 내용 중심·행동을 정확히 이름 짓기를 채택했다. 반복 생성 카드 대신 같은 위치의 방식 탐색을 사용하고 선택 입력은 접어서 시작한다. 사용자 요청이 업무 화면 미리보기이므로 사진·히어로·랜덤 팔레트·효과·마케팅 gate는 적용하지 않았다.
+
+UI UX Pro Max 검색 `form field grouping progressive disclosure --domain ux -n 3`에서 Error Placement / Submit Feedback / Form Labels가 반환되었다. 입력별 보이는 라벨, aria-describedby로 연결한 오류와 첫 오류로의 포커스, 실제 저장 성공과 구별한 미리보기 결과를 채택했다. 필드 그룹/선택 정보 접기/뒤로 가기·입력 보존은 quick-reference의 field-grouping/progressive-disclosure/back-behavior/state-preservation 기준을 사용했다. 기존 디자인 방향을 유지하는 개별 폼 개선이므로 전체 디자인 시스템/다른 프레임워크 가이드는 생성하지 않았다.
+
+실제 브라우저에서 먼저 프로젝트 이름 입력이 짧게 보이던 폭을 수정했다. AI/폴더 방식으로 바꿀 때 이전 수동 입력이 새 결과처럼 보이지 않게 요약 상태를 분리했다. hash 탐색 중 건너뛰기 링크가 생성 화면을 벗어나지 않도록 수정했다. Computer Use에서도 생성 전용 화면 접근, 직접 입력 예시와 요약, AI 요청 화면을 직접 확인하고 미리보기 탭을 남겼다.
+
+Edge QA: 320/390/768/1024/1440px × 목록/연결/이력/직접 입력/AI/폴더 = 30개 조합의 수평 넘침·보이는 라벨·접근성 제목을 확인했다. 검색/빈 상태, 필수 오류와 포커스, 실시간 요약과 사용자 문자열 이스케이프, AI 예시→수정→생성 후 화면, 폴더 예시→결과, 브라우저 뒤로 가기와 입력 유지, 건너뛰기와 현재 화면 보존, 긴 한국어를 검증했다. 점검한 본문/보조문/사이드바의 대비는 4.5:1 이상이며 전체 접근성 인증은 아니다. JavaScript 오류 0건, 외부 요청 0건, 요청은 정적 자산 GET만 있었고 앱 API 호출은 0건이었다.
+
+최종 결과: `runtime/project-create-preview-review-1794742576021394400/verification.json`, `final-create.png`, `list-1440.png`, `ai-1440.png`, `import-1440.png`, `long-korean-390.png`. 본앱 공통 레이아웃 변경이 없어 `scripts/ui_review.py`와 기존 기능 테스트/Windows 빌드를 다시 실행하지 않았다. 프로토타입은 새 공통 디자인 규칙의 확정이 아니므로 MASTER는 유지했다.
+
+---
+
 ## 문의함 필터·출처 / 프로젝트 연결 검토 (2026-11-15)
 
 두 원본 체크아웃 HEAD f6b76575f949707b4e3c37cd86cb44b0b98643e8 / 6ae86f61f520d6ca229d2f40e070410638c908c5를 다시 확인하고 두 SKILL 원문과 Taste system/copy, UI UX quick-reference의 탐색 지침을 읽었다. Taste의 실제 콘텐츠·동일 체계·행동을 정확히 이름 짓는 기준에 따라 빈 `[]`와 검색하지 않은 결과의 단정을 제거하고 실제 선택/연결 행동을 제공했다. 업무 화면이므로 사진·히어로·랜덤 팔레트·애니메이션·마케팅 gate는 적용하지 않았다.

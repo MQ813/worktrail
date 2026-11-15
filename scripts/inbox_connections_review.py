@@ -116,7 +116,7 @@ def main():
                 ("inbox", "/"),
                 ("review-filter", "/?state=needs_review"),
                 ("stale-filter", "/?view=drafts&freshness=stale"),
-                ("connections", "/projects"),
+                ("connections", "/projects?tab=connections"),
             ]
             for width in (320, 390, 768, 1024, 1440):
                 page.set_viewport_size({"width": width, "height": 1000})
@@ -167,7 +167,7 @@ def main():
             assert len({c["background"] for c in contrasts}) == 2
             page.keyboard.press("Tab")
             assert page.locator(":focus").inner_text() == "본문으로 건너뛰기"
-            page.goto(base + "/projects")
+            page.goto(base + "/projects?tab=connections")
             articles = page.locator(".project-candidate")
             assert articles.count() == 2
             assert all("[]" not in text for text in articles.all_text_contents())
@@ -182,7 +182,7 @@ def main():
             page.locator("#toast").filter(
                 has_text="선택한 프로젝트에 연결했습니다."
             ).wait_for()
-            page.goto(base + "/projects")
+            page.goto(base + "/projects?tab=connections")
             assert page.locator(".project-candidate").count() == 1
             page.locator(".project-candidate .candidate-link > summary").click()
             form = page.locator(".project-candidate form[data-project-api]")

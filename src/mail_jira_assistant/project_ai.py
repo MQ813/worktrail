@@ -14,6 +14,8 @@ class CommandInput(Strict):
     project_id: int | None = None
     work_item_id: int | None = None
     mode: str = "auto"
+    preview: bool = False
+    include_subissues: bool = False
     request_key: str = Field(min_length=1, max_length=100)
 
 
@@ -24,10 +26,16 @@ class CommandRequest(Strict):
     project_id: int | None
     work_item_id: int | None = None
     project_common_only: bool = False
+    preview: bool = False
+    review_edits: dict = Field(default_factory=dict)
     sources: list[dict]
     projects: list[dict]
     rules: str = (
-        "Return a project creation or update, or needs_input with a specific question. "
+        "Return a project creation or update, search, or needs_input with a specific question. "
+        "Search/find/list/summarize-only instructions must return outcome=search, never create or update. "
+        "Search results use matches [{project_id,reason}] from supplied projects only; no metadata or changes. "
+        "Explicit mode search is read-only. Empty matches means no matching supplied project. "
+        "For conditional requests (if existing update, otherwise create), match first and update when a match exists. "
         "Explicit mode create means create; update must select an existing project. "
         "Match process + library/development target + deliverable, never process alone. "
         "Prefer small projects. Large scope or long history requires work_title and detail=true for subissues. "
@@ -49,6 +57,11 @@ class CommandRequest(Strict):
     )
 
 
+class SearchMatch(Strict):
+    project_id: int = Field(gt=0)
+    reason: str = Field(min_length=1, max_length=2000)
+
+
 class CommandResult(Strict):
     outcome: str = "needs_input"
     question: str = ""
@@ -57,6 +70,13 @@ class CommandResult(Strict):
     metadata: dict[str, str] = Field(default_factory=dict)
     changes: list[ProjectChange] = Field(default_factory=list, max_length=50)
     before_text: dict[str, str] = Field(default_factory=dict)
+    matches: list[SearchMatch] = Field(default_factory=list, max_length=20)
+
+
+class ProposalEdits(Strict):
+    name: str | None = Field(default=None, min_length=1, max_length=300)
+    metadata: dict[str, str] = Field(default_factory=dict, max_length=8)
+    texts: list[str] | None = Field(default=None, max_length=50)
 
 
 FIELDS = (
@@ -119,7 +139,7 @@ def scoped_context(state, work_item_id, common_only=False):
 
 
 def enqueue(db, data):
-    if data.mode not in ("auto", "create", "update"):
+    if data.mode not in ("auto", "create", "update", "search"):
         raise ValueError("잘못된 생성 모드")
     if not data.text.strip() and not data.inquiry_ids:
         raise ValueError("요청 내용 또는 문의를 선택하세요.")
@@ -157,6 +177,8 @@ def enqueue(db, data):
     ids = [r[0] for r in db.execute("SELECT id FROM projects ORDER BY id")]
     if data.project_id and data.project_id not in ids:
         raise ValueError("프로젝트가 없습니다.")
+    if data.project_id and data.mode == "create":
+        raise ValueError("신규 생성 요청에서는 대상 프로젝트를 비워 주세요.")
     if data.work_item_id and (
         not data.project_id
         or data.mode == "create"
@@ -166,22 +188,22 @@ def enqueue(db, data):
         ).fetchone()
     ):
         raise ValueError("이 프로젝트의 하위 이슈가 아닙니다.")
+    common_only = not (data.work_item_id or data.include_subissues)
     request = CommandRequest(
         instruction=data.text,
         mode=data.mode,
         project_id=data.project_id,
         work_item_id=data.work_item_id,
-        project_common_only=not bool(data.work_item_id),
+        project_common_only=common_only,
+        preview=data.preview,
         sources=sources,
         projects=[
-            scoped_context(
-                snapshot(db, pid), data.work_item_id, not bool(data.work_item_id)
-            )
+            scoped_context(snapshot(db, pid), data.work_item_id, common_only)
             for pid in ids
             if not data.project_id or pid == data.project_id
         ],
     )
-    if len(request.model_dump_json()) > 23000:
+    if len(request.model_dump_json()) > (160000 if data.preview else 23000):
         raise ValueError("입력 범위가 큽니다. 문의 수 또는 프로젝트 범위를 줄여주세요.")
     db.execute(
         "INSERT INTO project_ai_requests(id,input,context,created) VALUES(?,?,?,?)",
@@ -199,7 +221,7 @@ def enqueue(db, data):
     return data.request_key
 
 
-def apply(db, request, result, key):
+def apply(db, request, result, key, *, reviewed=False):
     from .project_updates import ensure_project
     from .service import latest
 
@@ -217,10 +239,44 @@ def apply(db, request, result, key):
             ),
         )
         return
+    if result.outcome == "search":
+        if request.mode not in ("auto", "search") or result.changes or result.metadata:
+            raise ValueError("검색 결과에는 프로젝트 변경을 포함할 수 없습니다.")
+        ids = {p["id"] for p in request.projects}
+        if any(m.project_id not in ids for m in result.matches):
+            raise ValueError("검색 결과의 프로젝트가 요청 범위에 없습니다.")
+        db.execute(
+            "UPDATE project_ai_requests SET state='searched',result=? WHERE id=?",
+            (result.model_dump_json(), key),
+        )
+        return
     if result.outcome not in ("create", "update"):
         raise ValueError("잘못된 AI 결과")
-    if request.mode in ("create", "update") and result.outcome != request.mode:
+    if (
+        request.mode in ("create", "update", "search")
+        and result.outcome != request.mode
+    ):
         raise ValueError("요청한 생성/수정 방식과 AI 결과가 다릅니다.")
+    if result.matches:
+        raise ValueError("생성/수정 결과에는 검색 결과를 함께 넣을 수 없습니다.")
+    if request.preview and not reviewed:
+        # Validate exactly the same transaction as apply, then discard its writes.
+        # Only the durable proposal survives; no project/link/history is changed yet.
+        db.execute("SAVEPOINT project_proposal")
+        try:
+            apply(db, request, result.model_copy(deep=True), key, reviewed=True)
+        finally:
+            db.execute("ROLLBACK TO project_proposal")
+            db.execute("RELEASE project_proposal")
+        db.execute(
+            "UPDATE project_ai_requests SET state='ready',project_id=?,result=? WHERE id=?",
+            (
+                result.project_id if result.outcome == "update" else None,
+                result.model_dump_json(),
+                key,
+            ),
+        )
+        return
     for s in request.sources:
         if s["source_ref"] != "user" and latest(db, s["source_ref"]) != s["revision"]:
             raise ValueError("문의가 변경되었습니다. 최신 내용으로 다시 요청하세요.")
@@ -429,8 +485,10 @@ def apply_changes(db, pid, request, result, before):
                 or e.text not in source["body"]
             ):
                 raise ValueError("AI 근거가 원문과 일치하지 않습니다.")
-        if not request.project_common_only and (
-            len(result.changes) >= 6 or (before and len(before["entries"]) >= 20)
+        if (
+            not request.preview
+            and not request.project_common_only
+            and (len(result.changes) >= 6 or (before and len(before["entries"]) >= 20))
         ):
             c.detail = True
             if not c.work_item_id and not c.work_title:
@@ -473,6 +531,7 @@ def apply_changes(db, pid, request, result, before):
                 or c.entry_id in seen
                 or old["text"] != result.before_text.get(str(c.entry_id))
                 or old["section"] != c.section
+                or old["work_item_id"] != wid
             ):
                 raise ValueError("기존 내용과 변경 요청이 상충합니다.")
             seen.add(c.entry_id)
@@ -489,6 +548,41 @@ def apply_changes(db, pid, request, result, before):
                     "INSERT INTO project_entries(project_id,work_item_id,section,kind,text,action_id) VALUES(?,?,?,?,?,?)",
                     (pid, wid, c.section, c.kind, c.text, c.action_id),
                 )
+
+
+def apply_proposal(db, key, edits):
+    row = db.execute("SELECT * FROM project_ai_requests WHERE id=?", (key,)).fetchone()
+    if not row or row["state"] not in ("ready", "applied"):
+        raise ValueError(
+            "반영할 변경안이 없습니다. 작업 이력에서 요청 상태를 확인하세요."
+        )
+    if row["state"] == "applied":
+        return row["project_id"]
+    request = CommandRequest.model_validate_json(row["context"])
+    result = CommandResult.model_validate_json(row["result"])
+    if not request.preview or result.outcome not in ("create", "update"):
+        raise ValueError("반영할 변경안이 아닙니다.")
+    if edits.name is not None:
+        if result.outcome != "create" or not edits.name.strip():
+            raise ValueError("새 프로젝트 이름을 입력하세요.")
+        result.name = edits.name.strip()
+    if set(edits.metadata) - set(result.metadata):
+        raise ValueError(
+            "변경안에 없는 필드를 추가할 수 없습니다. 새 요청을 작성하세요."
+        )
+    result.metadata.update(edits.metadata)
+    if edits.texts is not None:
+        if len(edits.texts) != len(result.changes):
+            raise ValueError("변경 항목 수가 다릅니다. 변경안을 다시 불러오세요.")
+        for change, text in zip(result.changes, edits.texts, strict=True):
+            if not text.strip() or len(text) > 5000:
+                raise ValueError("변경 내용은 1~5000자로 입력하세요.")
+            change.text = text.strip()
+    request.review_edits = edits.model_dump(exclude_none=True)
+    apply(db, request, result, key, reviewed=True)
+    return db.execute(
+        "SELECT project_id FROM project_ai_requests WHERE id=?", (key,)
+    ).fetchone()[0]
 
 
 def review(db, hid, undo=False):

@@ -29,15 +29,18 @@ def prose(text, esc, limit=360):
     return f'<details class="long-content"><summary>{esc(excerpt(text, 180))} <span class="text-link">전체 내용</span></summary><p class="project-text">{esc(text)}</p></details>'
 
 
-def index_table(rows, esc, q="", attention=""):
+def index_table(rows, esc, q="", attention="", state=""):
     filtered = [
         p
         for p in rows
         if q.casefold() in (p["code"] + p["name"] + p["purpose"]).casefold()
         and (not attention or p["unconfirmed"] or p["pending"])
+        and (not state or p["state"] == state)
     ]
-    body = '<header class="project-top"><div><h1>프로젝트</h1><p>목표와 진행 내용, 하위 이슈를 한곳에서 관리합니다.</p></div><div class="toolbar"><a class="button" href="#ai-project-request">AI로 생성</a><a class="button primary" href="#new-project">프로젝트 추가</a></div></header>'
-    body += f'<form class="workspace-filter" method="get"><label>프로젝트 검색<input type="search" name="q" value="{esc(q)}" placeholder="이름, 프로젝트 번호, 목적"></label><label>확인 상태<select name="attention"><option value="">전체 프로젝트</option><option value="review"{" selected" if attention else ""}>확인이 필요한 프로젝트</option></select></label><button>검색</button></form>'
+    body = f'<form class="workspace-filter" method="get"><label>프로젝트 검색<input type="search" name="q" value="{esc(q)}" placeholder="이름, 프로젝트 번호, 목적"></label><label>확인 상태<select name="attention"><option value="">전체 프로젝트</option><option value="review"{" selected" if attention else ""}>확인이 필요한 프로젝트</option></select></label><label>진행 상태<select name="state"><option value="">전체 상태</option>'
+    for key, title in STATES.items():
+        body += f'<option value="{key}"{" selected" if state == key else ""}>{title}</option>'
+    body += "</select></label><button>검색</button></form>"
     body += f'<section class="project-directory"><div class="section-heading"><h2>프로젝트 목록 <span class="muted">{len(filtered)}개</span></h2></div>'
     if not filtered:
         body += (
