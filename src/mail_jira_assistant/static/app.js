@@ -27,12 +27,14 @@ document.querySelectorAll('form[data-project-api]').forEach(form=>{
     event.preventDefault();const feedback=form.querySelector('.form-feedback');const button=form.querySelector('button');
     const data=Object.fromEntries(new FormData(form));
     if(form.dataset.version)data.version=Number(form.dataset.version);
-    if(form.elements.namedItem('detail'))data.detail=form.elements.namedItem('detail').checked;
-    button.disabled=true;feedback.textContent='저장 중입니다…';
+    if(form.elements.namedItem('detail'))data.detail=form.elements.namedItem('detail').type==='hidden'?form.elements.namedItem('detail').value==='true':form.elements.namedItem('detail').checked;
+    if(data.work_item_id)data.work_item_id=Number(data.work_item_id);
+    button.disabled=true;feedback.classList.remove('is-error');feedback.textContent='저장 중입니다…';
     try{const result=await api(form.dataset.projectApi,form.dataset.method||'POST',data);dirty=false;
       if(result.queued!==undefined){feedback.textContent=result.queued+'건을 등록했습니다. 운영 상태에서 처리 결과를 확인하세요.';button.disabled=false}
-      else if(result.redirect)location.href=result.redirect;else if(result.id)location.href='/projects/'+result.id;else location.reload();
-    }catch(error){feedback.textContent=error.message;button.disabled=false}
+      else if(result.redirect){if(result.message){try{sessionStorage.setItem('worktrail-save-feedback',result.message)}catch{}}location.href=result.redirect}
+      else if(result.id)location.href='/projects/'+result.id;else location.reload();
+    }catch(error){feedback.classList.add('is-error');feedback.textContent=error.message;button.disabled=false}
   });
 });
 document.querySelectorAll('.project-proposal').forEach(input=>input.addEventListener('input',()=>{dirty=true}));
@@ -46,3 +48,63 @@ document.addEventListener('click',async event=>{
   try{await api('/api/projects/review','POST',{selections:articles.map(a=>({id:Number(a.dataset.changeId),decision,text:a.querySelector('.project-proposal').value}))});dirty=false;location.reload()}
   catch(error){feedback.textContent=error.message;button.disabled=false}
 });
+async function submitProjectAI(data, feedback, button) {
+  button.disabled=true;
+  feedback.classList.remove('is-error');
+  feedback.textContent='AI 처리 요청을 등록 중입니다…';
+  try {
+    const result=await api('/api/project-ai','POST',data);
+    dirty=false;
+    feedback.textContent='AI가 처리 중입니다. 완료되면 프로젝트로 이동합니다.';
+    let count=0;
+    const poll=async()=>{
+      try {
+        const response=await fetch('/api/project-ai/'+encodeURIComponent(result.request_id));
+        if(!response.ok)throw Error('처리 상태를 불러오지 못했습니다. 최근 AI 요청에서 확인하세요.');
+        const state=await response.json();
+        if(state.state==='applied'){location.href='/projects/'+state.project_id+(data.work_item_id?'?view=issues&work_item='+data.work_item_id:'?view=review');return}
+        if(state.state==='needs_input'||state.job_state==='failed'){
+          feedback.classList.add('is-error');feedback.textContent=state.question||state.error||'처리에 실패했습니다.';button.disabled=false;delete button.dataset.requestKey;return;
+        }
+        if(++count>=180){feedback.textContent='계속 처리 중입니다. 프로젝트 목록의 최근 AI 요청에서 결과를 확인하세요.';button.disabled=false;return}
+        setTimeout(poll,2000);
+      }catch(error){feedback.classList.add('is-error');feedback.textContent=error.message;button.disabled=false}
+    };
+    setTimeout(poll,500);
+  }catch(error){feedback.classList.add('is-error');feedback.textContent=error.message;button.disabled=false}
+}
+document.querySelectorAll('.project-ai-form').forEach(form=>{
+  form.addEventListener('input',()=>{dirty=true;delete form.querySelector('button').dataset.requestKey});
+  form.addEventListener('submit',event=>{
+    event.preventDefault();const button=form.querySelector('button');
+    button.dataset.requestKey ||= crypto.randomUUID();
+    const data={text:form.elements.text.value,mode:form.elements.mode.value,project_id:Number(form.elements.project_id.value)||null,
+      inquiry_ids:[...form.elements.inquiry_ids.selectedOptions].map(option=>option.value),request_key:button.dataset.requestKey};
+    if(form.elements.work_item_id)data.work_item_id=Number(form.elements.work_item_id.value);
+    submitProjectAI(data,form.querySelector('.form-feedback'),button);
+  });
+});
+document.querySelectorAll('.project-ai-create').forEach(button=>button.addEventListener('click',()=>{
+  button.dataset.requestKey ||= crypto.randomUUID();
+  submitProjectAI({text:'선택한 문의 내용으로 신규 프로젝트를 만들어줘. 부족한 정보는 TBD로 남겨줘.',mode:'create',inquiry_ids:[button.dataset.inquiry],request_key:button.dataset.requestKey},button.closest('article').querySelector('.form-feedback'),button);
+}));
+
+document.querySelectorAll('[data-open-dialog]').forEach(button=>button.addEventListener('click',()=>{
+  const dialog=document.getElementById(button.dataset.openDialog);
+  dialog.showModal();const input=dialog.querySelector('textarea');
+  if(button.dataset.aiPrompt&&!input.value)input.value=button.dataset.aiPrompt;
+  input?.focus();
+}));
+document.querySelectorAll('[data-close-dialog]').forEach(button=>button.addEventListener('click',()=>button.closest('dialog').close()));
+function revealHash(){
+  const target=document.getElementById(location.hash.slice(1));
+  if(!target)return;
+  for(let element=target;element;element=element.parentElement)if(element.tagName==='DETAILS')element.open=true;
+  target.scrollIntoView({block:'start'});
+}
+window.addEventListener('hashchange',revealHash);
+if(location.hash)revealHash();
+try{
+  const feedback=sessionStorage.getItem('worktrail-save-feedback');
+  if(feedback){sessionStorage.removeItem('worktrail-save-feedback');toast(feedback)}
+}catch{}

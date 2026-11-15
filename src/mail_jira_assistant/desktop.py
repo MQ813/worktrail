@@ -131,7 +131,7 @@ def tasks(settings, stop):
                 settings.classify_model
                 if kind == "classify"
                 else (settings.project_update_model or settings.draft_model)
-                if kind == "project_update"
+                if kind in ("project_update", "project_command")
                 else settings.draft_model,
                 settings.ai_timeout,
                 settings.ai_agent,
@@ -149,6 +149,9 @@ def tasks(settings, stop):
 
         def draft(self, request):
             return self.run("draft", request)
+
+        def project_command(self, request):
+            return self.run("project_command", request)
 
         def project_update(self, request):
             return self.run("project_update", request)

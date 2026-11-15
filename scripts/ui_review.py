@@ -118,7 +118,7 @@ def main():
             args.url + "/api/projects", data={"name": "UI 검증 프로젝트"}
         )
         pid = response.json()["id"]
-        page.goto(args.url + f"/projects/{pid}")
+        page.goto(args.url + f"/projects/{pid}?view=records")
         page.locator("#record-editor > summary").click()
         form = page.locator("#activity-form")
         form.get_by_label("수행 내용", exact=True).fill("UI 브라우저 검증용 수행 기록")

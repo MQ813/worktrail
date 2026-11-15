@@ -34,7 +34,7 @@ def test_records_are_project_scoped_and_legacy_links_redirect(tmp_path):
     pids = {r["name"]: r["id"] for r in db.execute("SELECT id,name FROM projects")}
     db.close()
     client = TestClient(create_app(tmp_path, tmp_path))
-    response = client.get(f"/projects/{pids['A']}")
+    response = client.get(f"/projects/{pids['A']}?view=records")
     assert "ONLY_PROJECT_A" in response.text and "ONLY_PROJECT_B" not in response.text
     assert 'name="project" value="A"' in response.text
     assert client.get(f"/projects/{pids['A']}?edit={b}").status_code == 404
@@ -62,7 +62,7 @@ def test_unassigned_legacy_records_can_be_assigned_without_loss(tmp_path):
     )
     assert response.status_code == 200
     assert f"/projects/{pid}?edit={aid}" in response.json()["redirect"]
-    assert "LEGACY_PRESERVED" in client.get(f"/projects/{pid}").text
+    assert "LEGACY_PRESERVED" in client.get(f"/projects/{pid}?view=records").text
     assert "LEGACY_PRESERVED" not in client.get("/projects").text
     assert client.get(f"/api/activities/{aid}/history").json()["edits"]
     assert (

@@ -105,13 +105,111 @@ def context(db, iid):
     return result
 
 
+def connection_signal(db, iid, classification=None):
+    """Only positive work/project evidence belongs in the unassigned queue."""
+    from .service import latest
+
+    source = db.execute(
+        "SELECT subject,body,kind FROM sources WHERE id=?", (iid,)
+    ).fetchone()
+    if not source:
+        return {"eligible": False, "reason": "원문 없음", "hints": [], "evidence": ""}
+    subject, body = source["subject"] or "", source["body"] or ""
+    revision = latest(db, iid)
+    if classification is None:
+        row = db.execute(
+            "SELECT result FROM classifications WHERE source_id=?", (iid,)
+        ).fetchone()
+        data = json.loads(row[0]) if row else {}
+    else:
+        data = classification.model_dump()
+    manual = db.execute(
+        "SELECT result FROM manual_classifications WHERE inquiry_id=? AND revision_id=? ORDER BY id DESC LIMIT 1",
+        (iid, revision),
+    ).fetchone()
+    if manual:
+        data.update(json.loads(manual[0]))
+    text = subject + "\n" + body
+    codes = sorted(set(re.findall(r"\bJOB-\d{3,}\b", text)))
+    hints = [
+        h.strip()
+        for h in (data.get("project_hints") or [])
+        if isinstance(h, str) and h.strip()
+    ]
+    hints.extend(codes)
+    for p in db.execute("SELECT code,name FROM projects"):
+        if len(p["name"]) >= 4 and p["name"].casefold() in text.casefold():
+            hints.append(p["code"] + " · " + p["name"])
+    hints = list(dict.fromkeys(hints))[:8]
+    reasons = []
+    if data.get("project_update_needed") == "yes":
+        reasons.append("프로젝트 업데이트가 필요한 내용으로 분류됨")
+    elif data.get("update_kinds"):
+        labels = {
+            "todo": "할 일",
+            "decision": "결정",
+            "progress": "진행",
+            "schedule": "일정",
+            "performed": "수행",
+            "waiting": "대기",
+            "issue": "이슈",
+        }
+        kinds = [labels[k] for k in data["update_kinds"] if k in labels]
+        if kinds:
+            reasons.append("업무 변경: " + ", ".join(dict.fromkeys(kinds)))
+    for key, label in (
+        ("action_required", "수행할 업무 있음"),
+        ("work_performed", "수행 내용 있음"),
+        ("waiting_for_others", "회신·결과 대기 내용 있음"),
+    ):
+        if data.get(key) == "yes":
+            reasons.append(label)
+    if codes:
+        reasons.append("원문에 프로젝트 코드가 명시됨")
+    blocked = (
+        source["kind"] == "jira_notification"
+        or bool(re.match(r"^\s*[\[(]광고[\])]", subject))
+        or data.get("project_update_needed") == "no"
+    )
+    evidence = next(
+        (
+            e.get("text", "")
+            for e in (data.get("evidence") or [])
+            if e.get("text") and e["text"] in body
+        ),
+        "",
+    )
+    return {
+        "eligible": bool(reasons) and not blocked,
+        "reason": " · ".join(reasons),
+        "hints": hints,
+        "evidence": evidence,
+    }
+
+
+def unassigned_candidates(db):
+    """Filter legacy rows on read as well, without modifying the user's inquiries."""
+    result = []
+    for row in db.execute(
+        "SELECT u.*,s.subject FROM project_unassigned u JOIN sources s ON s.id=u.inquiry_id WHERE NOT EXISTS(SELECT 1 FROM project_ai_dismissed d WHERE d.inquiry_id=u.inquiry_id AND d.revision_id=u.revision_id) ORDER BY u.revision_id DESC"
+    ).fetchall():
+        if context(db, row["inquiry_id"]):
+            continue
+        signal = connection_signal(db, row["inquiry_id"])
+        if signal["eligible"]:
+            result.append({**dict(row), **signal})
+    return result
+
+
 def schedule(db, iid, revision, classification=None, force=False):
     from .service import queue_job
 
-    if classification and classification.project_update_needed == "no":
+    signal = connection_signal(db, iid, classification)
+    if not force and not signal["eligible"]:
+        db.execute("DELETE FROM project_unassigned WHERE inquiry_id=?", (iid,))
         return False
     if not context(db, iid):
-        hints = classification.project_hints if classification else []
+        hints = signal["hints"]
         source = db.execute(
             "SELECT subject,body FROM sources WHERE id=?", (iid,)
         ).fetchone()
@@ -196,7 +294,7 @@ def store(db, request, result):
             if comparable(json.loads(c["payload"])) == comparable(change.model_dump())
         ]
         if any(
-            c["review"] in ("rejected", "confirmed")
+            c["review"] in ("rejected", "confirmed", "auto_applied")
             or (
                 c["review"] == "pending"
                 and c["freshness"] == "current"
@@ -305,6 +403,35 @@ def link(runtime, iid, name):
             )
             schedule(db, iid, latest(db, iid), force=True)
             return pid
+    finally:
+        db.close()
+
+
+def link_existing(runtime, iid, pid, revision):
+    from .service import latest
+
+    db = connect(runtime)
+    try:
+        with db:
+            db.execute("BEGIN IMMEDIATE")
+            if not db.execute("SELECT 1 FROM projects WHERE id=?", (pid,)).fetchone():
+                raise ValueError("선택한 프로젝트가 없습니다. 다시 선택하세요.")
+            if not db.execute("SELECT 1 FROM inquiries WHERE id=?", (iid,)).fetchone():
+                raise ValueError("문의가 없습니다.")
+            if latest(db, iid) != revision:
+                raise ValueError("새 원문이 도착했습니다. 새로고침 후 연결하세요.")
+            db.execute(
+                "INSERT OR REPLACE INTO project_source_links VALUES(?,?,'user')",
+                (iid, pid),
+            )
+            db.execute(
+                "INSERT OR REPLACE INTO inquiry_projects VALUES(?,?)", (iid, pid)
+            )
+            schedule(db, iid, revision, force=True)
+            db.execute(
+                "INSERT INTO audit(kind,target,detail,created) VALUES('project_link_existing',?,?,?)",
+                (iid, encoded({"project_id": pid, "revision": revision}), time.time()),
+            )
     finally:
         db.close()
 
@@ -631,6 +758,10 @@ def import_document(runtime, pid, path):
                         f"담당자: {p['owner']}",
                         f"상태: {p['state']}",
                         f"시작일: {p['started_on']}",
+                        f"목표 일정: {p['target_on']}",
+                        f"Spec: {p['spec']}",
+                        f"공정: {p['process']}",
+                        f"개발 대상: {p['development_target']}",
                     }
                 }:
                     continue
@@ -689,6 +820,8 @@ def edit_project(runtime, pid, data):
 
     if data.get("started_on"):
         date.fromisoformat(data["started_on"])
+    if data.get("target_on") not in (None, "", "TBD"):
+        date.fromisoformat(data["target_on"])
     db = connect(runtime)
     try:
         with db:
@@ -709,6 +842,11 @@ def edit_project(runtime, pid, data):
                 "UPDATE project_changes SET freshness='stale' WHERE project_id=? AND review='pending'",
                 (pid,),
             )
+            for field in ("target_on", "spec", "process", "development_target"):
+                if field in data:
+                    db.execute(
+                        f"UPDATE projects SET {field}=? WHERE id=?", (data[field], pid)
+                    )
             db.execute(
                 "INSERT INTO audit(kind,target,detail,created) VALUES('project_edit',?,?,?)",
                 (str(pid), encoded(data), time.time()),
@@ -721,7 +859,23 @@ def markdown(db, pid, pending=True, wid=None):
     p = db.execute("SELECT * FROM projects WHERE id=?", (pid,)).fetchone()
     if not p:
         raise ValueError("프로젝트 없음")
+    histories = [
+        dict(r)
+        for r in db.execute(
+            "SELECT * FROM project_ai_history WHERE project_id=? AND confirmed=0 AND reverted=0",
+            (pid,),
+        )
+    ]
+    if not pending and histories:
+        raise ValueError(
+            "AI 미확인 변경이 있습니다. 내용을 확인한 뒤 확정본을 내보내세요."
+        )
     lines = [f"# {p['code']} {p['name']}", ""]
+    if histories:
+        lines += [
+            f"AI 반영 · 미확인 {len(histories)}건 (업무 완료를 의미하지 않음)",
+            "",
+        ]
     entries = [
         dict(r)
         for r in db.execute(
@@ -738,6 +892,10 @@ def markdown(db, pid, pending=True, wid=None):
                     f"- 담당자: {p['owner']}",
                     f"- 상태: {p['state']}",
                     f"- 시작일: {p['started_on']}",
+                    f"- 목표 일정: {p['target_on']}",
+                    f"- Spec: {p['spec']}",
+                    f"- 공정: {p['process']}",
+                    f"- 개발 대상: {p['development_target']}",
                 ]
             )
         if section == "progress" and wid is None:

@@ -77,7 +77,7 @@ try:
                     "document.documentElement.scrollWidth <= innerWidth"
                 ), (route, width)
                 assert page.locator('nav a[aria-current="page"]').count() == 1
-                assert page.locator("nav a").all_text_contents() == [
+                assert page.locator(".nav a").all_text_contents() == [
                     "오늘",
                     "문의함",
                     "프로젝트",
@@ -104,7 +104,7 @@ try:
                         path=str(output / f"project-{width}.png"), full_page=True
                     )
         page.set_viewport_size({"width": 1440, "height": 1000})
-        page.goto(base + f"/projects/{pid}")
+        page.goto(base + f"/projects/{pid}?view=review")
         page.keyboard.press("Tab")
         assert page.locator(":focus").inner_text() == "본문으로 건너뛰기"
         first = page.locator("[data-change-id]").first
@@ -113,7 +113,7 @@ try:
         first.locator("textarea").fill("사람이 검토한 결정 내용")
         with page.expect_navigation(wait_until="networkidle"):
             first.locator('[data-project-review="confirmed"]').click()
-        assert "사람이 검토한 결정 내용" in page.locator(".project-entry").inner_text()
+        assert "사람이 검토한 결정 내용" in page.content()
         assert page.locator('[data-project-review="confirmed"]:disabled').count() >= 1
         with page.expect_navigation(wait_until="networkidle"):
             page.locator('[data-project-review="rejected"]').first.click()

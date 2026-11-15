@@ -674,9 +674,18 @@ def worker(
             active.update(token=token, job=row["id"])
             try:
                 revision = row["input_version"] or latest(db, row["source_id"])
-                request = build_request(
-                    db, row["source_id"], revision, kb, row["kind"], max_chars
-                )
+                if row["kind"] == "project_command":
+                    from .project_ai import CommandRequest
+
+                    command_row = db.execute(
+                        "SELECT context FROM project_ai_requests WHERE id=?",
+                        (row["request_id"],),
+                    ).fetchone()
+                    request = CommandRequest.model_validate_json(command_row[0])
+                else:
+                    request = build_request(
+                        db, row["source_id"], revision, kb, row["kind"], max_chars
+                    )
                 if row["kind"] == "classify":
                     request.projects = [
                         dict(p)
@@ -703,7 +712,9 @@ def worker(
                     )
                 if len(request.model_dump_json()) > max_chars:
                     raise ValueError("input_budget_exceeded")
-                if row["kind"] == "classify":
+                if row["kind"] == "project_command":
+                    result = runner.project_command(request)
+                elif row["kind"] == "classify":
                     result = runner.classify(request)
                     validate_evidence(result, request)
                 elif row["kind"] == "draft":
@@ -739,7 +750,7 @@ def worker(
                 iid = row["source_id"]
                 current = latest(db, iid)
                 freshness = "current" if current == revision else "stale"
-                for doc in request.knowledge:
+                for doc in getattr(request, "knowledge", []):
                     try:
                         current_ref = MarkdownKnowledge(kb).read(doc["path"])["ref"]
                     except (OSError, ValueError):
@@ -802,10 +813,17 @@ def worker(
                             and request.direction != "outbound"
                         ):
                             queue_job(db, iid, "draft", revision)
+                elif row["kind"] == "project_command":
+                    from .project_ai import apply
+
+                    apply(db, request, result, row["request_id"])
                 elif row["kind"] == "project_update":
                     from .project_updates import store
 
                     store(db, request, result)
+                    from .project_ai import auto_update
+
+                    auto_update(db, request, result)
                 elif row["kind"] == "draft":
                     db.execute(
                         "INSERT INTO draft_versions(inquiry_id,revision_id,generated,created) VALUES(?,?,?,?)",

@@ -84,7 +84,9 @@ def main():
             with urllib.request.urlopen(
                 base + f"/projects/{linked['id']}", timeout=5
             ) as response:
-                assert "미확정" in response.read().decode("utf-8")
+                project_html = response.read().decode("utf-8")
+                assert "프로젝트 배포 검증" in project_html
+                assert 'class="project-tabs"' in project_html
             deadline = time.monotonic() + 10
             while time.monotonic() < deadline:
                 with sqlite3.connect(root / "runtime" / "app.sqlite3") as db:
@@ -97,6 +99,22 @@ def main():
                 time.sleep(0.2)
             else:
                 raise AssertionError("Frozen project update job did not complete")
+            with sqlite3.connect(root / "runtime" / "app.sqlite3") as db:
+                version = db.execute(
+                    "SELECT version FROM projects WHERE id=?", (linked["id"],)
+                ).fetchone()[0]
+            issue = request(
+                base,
+                f"/api/projects/{linked['id']}/work-items",
+                dict(version=version, title="CELL_NATIVE 검증", detail=True),
+            )
+            with urllib.request.urlopen(
+                base + issue["redirect"], timeout=5
+            ) as response:
+                issue_html = response.read().decode("utf-8")
+                assert "CELL_NATIVE 검증" in issue_html
+                assert "이슈 내용 추가" in issue_html
+                assert 'name="work_item_id"' in issue_html
         on = datetime.now(ZoneInfo("Asia/Seoul")).date().isoformat()
         saved = request(
             base,

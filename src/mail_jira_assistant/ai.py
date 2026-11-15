@@ -13,6 +13,40 @@ from .contracts import Classification, Draft, ProjectUpdate
 
 
 class FakeRunner:
+    def project_command(self, request):
+        from .project_ai import CommandResult
+
+        pid = request.project_id
+        if request.mode == "update" and not pid:
+            return CommandResult(question="프로젝트를 선택하세요.")
+        source = next(
+            (
+                s
+                for s in request.sources
+                if s["source_ref"] != "user" and s["body"].strip()
+            ),
+            None,
+        ) or next((s for s in request.sources if s["body"].strip()), None)
+        if not source:
+            return CommandResult(question="요청 내용을 입력하세요.")
+        return CommandResult(
+            outcome="update" if pid else "create",
+            project_id=pid,
+            name=(source.get("subject") or source["body"].splitlines()[0])[:300],
+            changes=[
+                dict(
+                    project_id=pid or 0,
+                    work_item_id=request.work_item_id,
+                    section="overview",
+                    kind="issue",
+                    text=source["body"][:5000],
+                    evidence=[
+                        dict(source_ref=source["source_ref"], text=source["body"][:100])
+                    ],
+                )
+            ],
+        )
+
     def project_update(self, request):
         changes = []
         latest = request.body.split("[이전 대화]")[0].strip()
@@ -314,6 +348,15 @@ class OpenCodeRunner:
 
     def draft(self, request):
         return self._call("draft", request, Draft)
+
+    def project_command(self, request):
+        from .project_ai import CommandResult
+
+        return self._call(
+            "project_command (follow INPUT.rules; other stage contracts do not apply)",
+            request,
+            CommandResult,
+        )
 
     def project_update(self, request):
         return self._call("project_update", request, ProjectUpdate)

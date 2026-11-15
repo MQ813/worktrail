@@ -339,7 +339,7 @@ def test_migration_v5_preserves_project_name_and_source(tmp_path):
     runtime, iid, pid = setup(tmp_path)
     db = connect(runtime)
     with db:
-        db.execute("DELETE FROM migrations WHERE version=6")
+        db.execute("DELETE FROM migrations WHERE version>=6")
     db.close()
     db = connect(runtime)
     assert (

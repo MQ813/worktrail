@@ -291,6 +291,7 @@ def create_app(runtime, kb=None, jira_servers=(), *, sample_mode=False):
         server: str = "",
         work: str = "",
         after: str = "",
+        freshness: str = "",
     ):
         all_items = inquiries()
         items = [
@@ -303,6 +304,7 @@ def create_app(runtime, kb=None, jira_servers=(), *, sample_mode=False):
             )
             and (not state or r["state"] == state)
             and (view != "drafts" or r["review"])
+            and (not freshness or r["freshness"] == freshness)
         ]
         if source:
             items = [
@@ -311,7 +313,7 @@ def create_app(runtime, kb=None, jira_servers=(), *, sample_mode=False):
                 if (
                     r["kind"] == "jira"
                     if source == "jira"
-                    else r["direction"] == source
+                    else r["kind"] != "jira" and r["direction"] == source
                 )
             ]
         if server:
@@ -356,20 +358,42 @@ def create_app(runtime, kb=None, jira_servers=(), *, sample_mode=False):
                 )
             ]
         stats = [
-            ("확인할 문의", sum(r["state"] == "needs_review" for r in all_items)),
-            ("진행 중", sum(r["state"] == "in_progress" for r in all_items)),
-            ("회신 대기", sum(r["state"] == "waiting_external" for r in all_items)),
-            ("재검토할 초안", sum(r["freshness"] == "stale" for r in all_items)),
+            (
+                "확인할 문의",
+                sum(r["state"] == "needs_review" for r in all_items),
+                "/?state=needs_review",
+                state == "needs_review" and not freshness,
+            ),
+            (
+                "진행 중",
+                sum(r["state"] == "in_progress" for r in all_items),
+                "/?state=in_progress",
+                state == "in_progress" and not freshness,
+            ),
+            (
+                "회신 대기",
+                sum(r["state"] == "waiting_external" for r in all_items),
+                "/?state=waiting_external",
+                state == "waiting_external" and not freshness,
+            ),
+            (
+                "재검토할 초안",
+                sum(r["freshness"] == "stale" for r in all_items),
+                "/?view=drafts&freshness=stale",
+                freshness == "stale",
+            ),
         ]
         body = (
             '<h1 class="sr-only">문의함</h1><div class="stats" aria-label="전체 문의 요약">'
             + "".join(
-                '<div class="stat"><span class="muted">'
+                f'<a class="stat" href="{esc(href)}" aria-label="{label} {n}건 보기"'
+                + (' aria-current="true"' if selected else "")
+                + '><span class="muted">'
                 + label
                 + "</span><strong>"
                 + str(n)
-                + "</strong></div>"
-                for label, n in stats
+                + "</strong></a>"
+                for label, n, href, selected in stats
             )
             + "</div>"
         )
@@ -418,7 +442,7 @@ def create_app(runtime, kb=None, jira_servers=(), *, sample_mode=False):
             + '</select></label><button class="primary">검색</button><a class="button" href="'
             + ("/?view=drafts" if view == "drafts" else "/")
             + '">초기화</a></div><details class="advanced-filters"'
-            + (" open" if server or work or after else "")
+            + (" open" if server or work or after or freshness else "")
             + '><summary>상세 필터</summary><div class="filter-extra"><label>서버 · 프로젝트 · 상대방<input name="server" value="'
             + esc(server)
             + '" placeholder="이름으로 검색"></label><label>작업<select name="work"><option value="">모든 작업</option><option value="actions" '
@@ -427,9 +451,20 @@ def create_app(runtime, kb=None, jira_servers=(), *, sample_mode=False):
             + ("selected" if work == "failed" else "")
             + '>실패 작업</option></select></label><label>수집 날짜 이후<input type="date" name="after" value="'
             + esc(after)
-            + '"></label></div></details></form><div class="scroll"><table class="inquiry-table"><thead><tr><th>문의 · 대화</th><th>업무 상태</th><th>답변 초안</th><th class="hide-mobile">출처</th></tr></thead><tbody>'
+            + '"></label><label>초안 최신성<select name="freshness"><option value="">전체</option>'
+            + "".join(
+                f'<option value="{value}"{" selected" if freshness == value else ""}>{label}</option>'
+                for value, label in (("current", "최신"), ("stale", "재검토 필요"))
+            )
+            + '</select></label></div></details></form><div class="scroll"><table class="inquiry-table"><thead><tr><th>문의 · 대화</th><th>업무 상태</th><th>답변 초안</th><th class="hide-mobile">출처</th></tr></thead><tbody>'
         )
         for r in items:
+            source_type = "jira" if r["kind"] == "jira" else r["direction"]
+            source_label = (
+                "JIRA"
+                if source_type == "jira"
+                else LABELS.get(source_type, source_type)
+            )
             body += (
                 '<tr><td><a class="title" href="/inquiries/'
                 + r["id"]
@@ -448,12 +483,7 @@ def create_app(runtime, kb=None, jira_servers=(), *, sample_mode=False):
                     if r["review"]
                     else '<span class="muted">초안 없음</span>'
                 )
-                + '</td><td class="hide-mobile">'
-                + esc(
-                    "JIRA"
-                    if r["kind"] == "jira"
-                    else LABELS.get(r["direction"], r["direction"])
-                )
+                + f'</td><td class="hide-mobile"><span class="source-badge source-badge--{esc(source_type)}">{esc(source_label)}</span>'
                 + "</td></tr>"
             )
         body += (
@@ -1217,8 +1247,12 @@ def create_app(runtime, kb=None, jira_servers=(), *, sample_mode=False):
         body += '</section><section class="card spaced"><h2>작업 큐</h2><div class="scroll"><table><thead><tr><th>작업</th><th>상태</th><th>시도</th><th>오류·복구</th></tr></thead><tbody>'
         for j in data["jobs"]:
             body += (
-                '<tr><td><a href="/inquiries/'
-                + j["source_id"]
+                '<tr><td><a href="'
+                + (
+                    "/inquiries/" + j["source_id"]
+                    if j["source_id"]
+                    else "/projects#ai-project-request"
+                )
                 + '">#'
                 + str(j["id"])
                 + " "
