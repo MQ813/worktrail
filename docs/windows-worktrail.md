@@ -24,6 +24,35 @@ C:\miniconda3\python.exe -m venv .venv
 
 Windows 10/11 x64, Microsoft Edge WebView2 Evergreen Runtime, .NET Framework 4.8 및 해당 runtime 정책을 확인하세요. 배포 폴더 전체를 복사합니다. Python은 빌드 호스트에 필요하고, 배포 실행 파일은 Python을 포함합니다. OpenCode와 Office/Outlook/DRM 허용 프로그램은 포함하지 않습니다. 사내 반입 시 대상 OS에서 smoke와 checksum을 확인하세요. 인터넷/CDN 정적 자산을 사용하지 않습니다.
 
+## Windows 빌드
+
+Windows PowerShell에서 저장소 루트 `D:\codes\worktrail`을 기준으로 실행합니다.
+처음 준비할 때는 위 실행 절의 명령으로 `.venv`를 생성합니다.
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -e '.[test,desktop,documents,build]'
+.\.venv\Scripts\python.exe -m pytest -q
+.\scripts\build_windows.ps1
+.\dist\WorkTrail\WorkTrail.exe
+```
+
+빌드 스크립트는 PyInstaller의 onedir 방식으로 `dist\WorkTrail`을 만들고,
+README와 `docs`를 복사합니다. 실행 파일은 `dist\WorkTrail\WorkTrail.exe`입니다.
+배포할 때는 `_internal`을 포함한 `dist\WorkTrail` 폴더 전체를 복사합니다.
+`-Output`은 WorkTrail 폴더를 생성할 상위 경로이며 기본값은 `dist`입니다.
+빌드는 현재 `.venv`의 패키지 목록을 `requirements-windows.lock`에도 기록합니다.
+
+실행 중인 배포 앱은 편집 내용을 저장하고 종료한 뒤 다시 빌드합니다.
+빌드 폴더와 별도로 기본 업무 데이터는 `%LOCALAPPDATA%\WorkTrail`에 보존됩니다.
+
+배포 파일의 실제 WebView2 실행·AI 변경안 반영·worker 복구·재실행 보존을
+별도의 샘플 데이터 경로에서 확인하려면 다음을 실행합니다.
+`--output`은 실행할 때마다 존재하지 않는 새 경로를 지정합니다.
+
+```powershell
+.\.venv\Scripts\python.exe scripts\desktop_smoke.py --exe dist\WorkTrail\WorkTrail.exe --output runtime\windows-build-smoke --projects
+```
+
 ## 실행 수명
 
 한 데이터 경로에 한 앱만 OS 파일 잠금으로 실행합니다. 백엔드는 loopback의 임의 포트를 실제 bind한 뒤 전달합니다. 웹/API와 수집·AI worker를 별도 프로세스로 분리합니다. 문서 추출/COM은 spawn한 별도 helper에서 실행하며 COM 호출은 직렬입니다. 트레이 상주는 이번 버전에 넣지 않았습니다. 창 닫기를 확인하면 백엔드/worker에 종료를 요청하고 최대 5초 후 해당 앱 프로세스만 종료합니다. 실행 중 lease가 남은 작업은 다음 기동 시 만료 후 기존 attempt token 규칙으로 복구합니다. Office/Outlook 프로세스를 종료하거나 Quit하지 않습니다. 창을 닫기 전에 편집본을 저장하세요.

@@ -56,7 +56,7 @@ AI 명령이 적용된 프로젝트는 이후 연결 문의의 신규 변경도 
 - Vega PLL: 기존 항목의 일정 변경, 변경 전후와 미확인 이력.
 - 대상 선택 필요 요청: 프로젝트를 잘못 생성하지 않고 질문을 보존.
 
-실행: `dist/WorkTrail-0.5.0/WorkTrail/WorkTrail.exe --data-dir D:\codes\worktrail\runtime\project-samples-20261115-final`
+실행: `dist/WorkTrail/WorkTrail.exe --data-dir D:\codes\worktrail\runtime\project-samples-20261115-final`
 
 샘플 설정은 fake backend로 시작하므로 추가 테스트는 합성 응답이며 실제 AI 판단이 아니다. 실제 OpenCode 생성 이력은 그대로 보존된다. 샘플 생성 재현:
 
